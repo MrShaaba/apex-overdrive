@@ -143,9 +143,11 @@ export function HUD() {
         )}
         <div className="hud__bars">
           <div className="hud__bar">
-            <div className="hud__label">Boost {hud.boostActive ? '●' : ''}</div>
+            <div className="hud__label">
+              ERS {Math.round(hud.nitro * 100)}% {hud.boostActive ? '⚡' : hud.ersHarvest ? '⟳' : ''}
+            </div>
             <div className="hud__bar-track">
-              <div className={`hud__bar-fill hud__bar-fill--nitro ${hud.boostActive ? 'is-active' : ''}`} style={{ width: `${hud.nitro * 100}%` }} />
+              <div className={`hud__bar-fill hud__bar-fill--nitro ${hud.boostActive ? 'is-active' : ''} ${hud.ersHarvest ? 'is-harvest' : ''}`} style={{ width: `${hud.nitro * 100}%` }} />
             </div>
           </div>
           {hud.turbo > 0.01 && (

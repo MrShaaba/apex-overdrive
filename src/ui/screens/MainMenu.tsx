@@ -99,7 +99,7 @@ export function MainMenu() {
               <kbd>Space</kbd> handbrake
             </span>
             <span>
-              <kbd>Shift</kbd> nitro
+              <kbd>Shift</kbd> ERS boost
             </span>
             <span>
               <kbd>C</kbd> camera

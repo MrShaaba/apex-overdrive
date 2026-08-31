@@ -5,7 +5,7 @@ import { TRACK_BY_ID } from '../../game/tracks/TrackCatalog'
 const TIPS = [
   'Brake before the apex, not in it. Trail-braking rotates the car.',
   'Handbrake (Space) plus a flick of steering starts a drift; throttle holds it.',
-  'Nitrous (Shift) refills slowly — save it for the longest straight.',
+  'ERS (Shift) deploys electric boost — brake or lift off to recharge the battery.',
   'Wet asphalt cuts grip by a quarter. Rally and winter tyres claw some back.',
   'Optional shortcuts skip checkpoints. Only required checkpoints validate a lap.',
   'The pit lane repairs damage and refuels — drive through it slowly.',

@@ -125,7 +125,7 @@ export const UPGRADE_INFO: Record<UpgradeCategory, UpgradeInfo> = {
   brakes: { id: 'brakes', title: 'Brake Hardware', description: 'Larger rotors and multi-piston calipers.', baseCost: 4000, icon: '🛑' },
   tires: { id: 'tires', title: 'Tires', description: 'Stickier compound. More lateral and longitudinal grip.', baseCost: 3500, icon: '⭕' },
   weight: { id: 'weight', title: 'Lightweight Parts', description: 'Carbon panels and stripped interior. Less mass, sharper response.', baseCost: 8000, icon: '🪶' },
-  nitro: { id: 'nitro', title: 'Boost Bottle', description: 'Bigger nitrous bottle and hotter jets.', baseCost: 3000, icon: '🧪' },
+  nitro: { id: 'nitro', title: 'ERS Battery', description: 'Bigger energy store and a stronger deploy.', baseCost: 3000, icon: '🔋' },
 }
 
 export function upgradeCost(category: UpgradeCategory, level: number, tier: number): number {

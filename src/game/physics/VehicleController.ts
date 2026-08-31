@@ -82,6 +82,8 @@ export interface VehicleTelemetry {
   turboBoost: number
   nitro: number
   nitroActive: boolean
+  /** True while the ERS battery is recharging from braking or coasting. */
+  harvesting: boolean
   fuel: number
   damage: number
   engineTorque: number
@@ -295,6 +297,7 @@ export class VehicleController {
       turboBoost: 0,
       nitro: this.nitro,
       nitroActive: false,
+      harvesting: false,
       fuel: this.fuel,
       damage: 0,
       engineTorque: 0,
@@ -548,13 +551,22 @@ export class VehicleController {
     }
     this.lastThrottle = throttle
 
-    // Nitrous.
+    // ERS battery. Deploys on the boost button under throttle; harvests
+    // kinetic energy under braking and lift-off coasting instead of the old
+    // unconditional trickle. Deploy power tapers off below ~30% charge so a
+    // draining battery fades instead of cutting out.
+    const ersCharge = this.nitro / Math.max(1, spec.performance.nitroCapacity)
     const nitroActive = input.boost && this.nitro > 0 && throttle > 0.1 && this.gear > 0
+    let ersHarvest = false
     if (nitroActive) {
       this.nitro = Math.max(0, this.nitro - 22 * dt)
-      inductionMult *= 1 + spec.performance.nitroPower
-    } else {
-      this.nitro = Math.min(spec.performance.nitroCapacity, this.nitro + 1.2 * dt)
+      inductionMult *= 1 + spec.performance.nitroPower * (0.35 + 0.65 * clamp01(ersCharge / 0.3))
+    } else if (forwardSpeed > 4 && this.gear > 0 && this.nitro < spec.performance.nitroCapacity) {
+      const rate = brake > 0.15 ? 14 * brake : throttle < 0.08 ? 5 : 0
+      if (rate > 0) {
+        this.nitro = Math.min(spec.performance.nitroCapacity, this.nitro + rate * dt)
+        ersHarvest = true
+      }
     }
 
     // Fuel.
@@ -826,6 +838,7 @@ export class VehicleController {
     t.turboBoost = this.turboBoost
     t.nitro = this.nitro
     t.nitroActive = nitroActive
+    t.harvesting = ersHarvest
     t.fuel = this.fuel
     t.damage = this.damage
     t.engineTorque = engineTorque

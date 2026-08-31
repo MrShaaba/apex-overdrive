@@ -58,6 +58,7 @@ export interface HudState {
   raceTime: number
   nitro: number
   boostActive: boolean
+  ersHarvest: boolean
   fuel: number
   damage: number
   turbo: number
@@ -129,6 +130,7 @@ export const initialHud = (): HudState => ({
   raceTime: 0,
   nitro: 1,
   boostActive: false,
+  ersHarvest: false,
   fuel: 1,
   damage: 0,
   turbo: 0,

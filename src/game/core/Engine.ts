@@ -1043,6 +1043,8 @@ export class Engine {
       redline: player.tuned.engine.redline,
       limiter: t.limiter,
       units: this.settings.controls.units,
+      ers: player.controller.getNitroFraction(),
+      ersMode: t.nitroActive ? 'deploy' : t.harvesting ? 'harvest' : 'idle',
     } : null)
 
     this.sky.update(simDt, w, player.position, this.cameraRig.camera.getWorldDirection(new THREE.Vector3()))
@@ -1180,6 +1182,7 @@ export class Engine {
         raceTime: race.raceTime,
         nitro: player.controller.getNitroFraction(),
         boostActive: t.nitroActive,
+        ersHarvest: t.harvesting,
         fuel: player.controller.getFuelFraction(),
         damage: player.controller.getDamage(),
         turbo: t.turboBoost,

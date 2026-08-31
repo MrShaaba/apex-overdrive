@@ -48,7 +48,7 @@ export function TouchControls({ layout }: { layout: TouchLayout }) {
         E-BRK
       </button>
       <button className="touch__btn touch__btn--small" data-touch-control style={{ right: 'calc(110px + var(--safe-right))', bottom: 'calc(140px + var(--safe-bottom))' }} {...bind((on) => (input.touch.boost = on))}>
-        NOS
+        ERS
       </button>
       <button className="touch__btn touch__btn--small" data-touch-control style={{ left: 'calc(18px + var(--safe-left))', top: 'calc(120px + var(--safe-top))' }} onClick={() => Engine.get().cycleCamera()}>
         CAM

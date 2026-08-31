@@ -137,9 +137,9 @@ export function OptionsScreen() {
                   <Toggle value={c.stabilityControl} onChange={(v) => update((s) => (s.controls.stabilityControl = v))} label="Stability control" />
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.6 }}>
-                  <b>Keyboard:</b> WASD / arrows drive · Space handbrake · Shift nitro · Q/E gears · C camera · B look back · R reset · F photo · V replay · N hide HUD · Esc pause.
+                  <b>Keyboard:</b> WASD / arrows drive · Space handbrake · Shift ERS boost · Q/E gears · C camera · B look back · R reset · F photo · V replay · N hide HUD · Esc pause.
                   <br />
-                  <b>Gamepad:</b> left stick steer · RT throttle · LT brake · B handbrake · push stick up for nitro · Y camera · bumpers shift · Start pause.
+                  <b>Gamepad:</b> left stick steer · RT throttle · LT brake · B handbrake · push stick up for ERS boost · Y camera · bumpers shift · Start pause.
                 </div>
               </Panel>
             </>

@@ -21,6 +21,9 @@ export interface WheelTelemetry {
   redline: number
   limiter: boolean
   units: 'kmh' | 'mph'
+  /** ERS battery charge 0..1. */
+  ers: number
+  ersMode: 'deploy' | 'harvest' | 'idle'
 }
 
 /** Visual rim rotation at full steering input. */
@@ -120,7 +123,7 @@ export class CockpitWheel {
     dash.add(trim)
     this.root.add(dash)
 
-    this.paint({ steerAngle: 0, maxSteerAngle: 1, gear: 0, speedKmh: 0, rpm: 0, redline: 8000, limiter: false, units: 'kmh' })
+    this.paint({ steerAngle: 0, maxSteerAngle: 1, gear: 0, speedKmh: 0, rpm: 0, redline: 8000, limiter: false, units: 'kmh', ers: 1, ersMode: 'idle' })
   }
 
   private geo<T extends THREE.BufferGeometry>(g: T): T {
@@ -150,7 +153,7 @@ export class CockpitWheel {
     const rpmT = clamp01(data.rpm / Math.max(1, data.redline))
     const leds = Math.round(clamp01((rpmT - 0.5) / 0.48) * LED_COUNT)
     const speed = Math.round(data.units === 'mph' ? data.speedKmh * 0.621371 : data.speedKmh)
-    const key = `${data.gear}|${speed}|${leds}|${data.limiter}|${data.units}`
+    const key = `${data.gear}|${speed}|${leds}|${data.limiter}|${data.units}|${Math.round(data.ers * 100)}|${data.ersMode}`
     if (key !== this.lastPaintKey || this.repaintTimer > 0.15) {
       this.lastPaintKey = key
       this.repaintTimer = 0
@@ -210,10 +213,27 @@ export class CockpitWheel {
     ctx.font = '700 24px system-ui, sans-serif'
     ctx.fillText(data.units === 'mph' ? 'MPH' : 'KM/H', 366, 212)
 
-    // RPM readout along the bottom.
+    // RPM readout.
     ctx.fillStyle = '#38414c'
     ctx.font = '700 22px system-ui, sans-serif'
-    ctx.fillText(`${Math.round(data.rpm)} RPM`, w / 2, 296)
+    ctx.fillText(`${Math.round(data.rpm)} RPM`, w / 2, 246)
+
+    // ERS battery bar along the bottom: cyan when deploying, green while
+    // harvesting, orange at rest.
+    const barX = 38
+    const barY = 272
+    const barW = w - 76
+    const barH = 34
+    const color = data.ersMode === 'deploy' ? '#7ef0ff' : data.ersMode === 'harvest' ? '#54e082' : '#ff9d45'
+    ctx.strokeStyle = '#38414c'
+    ctx.lineWidth = 3
+    ctx.strokeRect(barX, barY, barW, barH)
+    ctx.fillStyle = color
+    ctx.fillRect(barX + 3, barY + 3, Math.max(0, (barW - 6) * clamp01(data.ers)), barH - 6)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = '800 24px system-ui, sans-serif'
+    const ersLabel = data.ersMode === 'deploy' ? 'DEPLOY' : data.ersMode === 'harvest' ? 'CHARGING' : 'ERS'
+    ctx.fillText(`${ersLabel} ${Math.round(clamp01(data.ers) * 100)}%`, w / 2, barY + barH / 2 + 1)
 
     this.tex.needsUpdate = true
   }

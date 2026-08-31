@@ -908,6 +908,10 @@ input[type='text']:focus {
   background: linear-gradient(90deg, #fff, var(--cyan));
   box-shadow: 0 0 12px var(--cyan);
 }
+.hud__bar-fill--nitro.is-harvest {
+  background: linear-gradient(90deg, #2fae62, #7dff9f);
+  box-shadow: 0 0 8px rgba(84, 224, 130, 0.6);
+}
 .hud__bar-fill--fuel {
   background: linear-gradient(90deg, var(--gold), #ff9f1c);
 }
