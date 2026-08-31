@@ -295,6 +295,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   const lampOn = new THREE.MeshStandardMaterial({ color: 0xfff6d5, emissive: 0xfff2c0, emissiveIntensity: 2.5, roughness: 0.3 })
   const tailMat = new THREE.MeshStandardMaterial({ color: 0x5a0a12, emissive: 0xff1a2a, emissiveIntensity: 0.6, roughness: 0.3 })
   const rubber = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.92, metalness: 0 })
+  const sidewall = new THREE.MeshStandardMaterial({ color: 0x1e1f22, roughness: 0.85, metalness: 0.05 })
   const disc = new THREE.MeshStandardMaterial({ color: 0x777b82, metalness: 0.85, roughness: 0.5 })
   const caliper = new THREE.MeshStandardMaterial({ color: custom.accent, metalness: 0.4, roughness: 0.4 })
   // Solid-colour team paint for formula bodywork that shouldn't sample the
@@ -565,8 +566,14 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   // --- Wheels ---
   const wheels: THREE.Group[] = []
   const wheelSpin: THREE.Object3D[] = []
-  const tireGeo = new THREE.CylinderGeometry(b.wheelRadius, b.wheelRadius, b.wheelWidth, highDetail ? 28 : 14, 1, false)
-  const discGeo = new THREE.CylinderGeometry(b.wheelRadius * 0.58, b.wheelRadius * 0.58, 0.03, 20)
+  // Formula wheels are the car's face: open-ended high-poly tread with ring
+  // sidewalls that reveal the rim, a compound stripe, and bigger brakes.
+  const tireGeo = isFormula
+    ? new THREE.CylinderGeometry(b.wheelRadius, b.wheelRadius, b.wheelWidth, 36, 1, true)
+    : new THREE.CylinderGeometry(b.wheelRadius, b.wheelRadius, b.wheelWidth, highDetail ? 28 : 14, 1, false)
+  const discGeo = new THREE.CylinderGeometry(b.wheelRadius * (isFormula ? 0.66 : 0.58), b.wheelRadius * (isFormula ? 0.66 : 0.58), isFormula ? 0.035 : 0.03, isFormula ? 24 : 20)
+  const sidewallGeo = isFormula ? new THREE.RingGeometry(b.wheelRadius * 0.56, b.wheelRadius * 0.99, 36) : null
+  const stripeGeo = isFormula ? new THREE.TorusGeometry(b.wheelRadius * 0.9, 0.009, 6, 36) : null
   const armGeo = isFormula ? new THREE.CylinderGeometry(0.016, 0.016, 0.46, 6) : null
   const shaftGeo = isFormula ? new THREE.CylinderGeometry(0.026, 0.026, 0.42, 8) : null
   for (let i = 0; i < 4; i++) {
@@ -576,6 +583,19 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     tire.rotation.z = Math.PI / 2
     tire.castShadow = true
     spin.add(tire)
+    if (isFormula && sidewallGeo && stripeGeo) {
+      for (const s of [-1, 1]) {
+        const wall = new THREE.Mesh(sidewallGeo, sidewall)
+        wall.rotation.y = (s * Math.PI) / 2
+        wall.position.x = s * b.wheelWidth * 0.5
+        spin.add(wall)
+        // Compound stripe in the team accent colour.
+        const stripe = new THREE.Mesh(stripeGeo, caliper)
+        stripe.rotation.y = Math.PI / 2
+        stripe.position.x = s * (b.wheelWidth * 0.5 + 0.002)
+        spin.add(stripe)
+      }
+    }
     const rim = buildRim(custom.rims, b.wheelRadius, b.wheelWidth, custom.rimColor)
     spin.add(rim)
     // Tyre lettering band.
@@ -594,7 +614,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     const brakeDisc = new THREE.Mesh(discGeo, disc)
     brakeDisc.rotation.z = Math.PI / 2
     hub.add(brakeDisc)
-    const cal = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.1), caliper)
+    const cal = new THREE.Mesh(new THREE.BoxGeometry(isFormula ? 0.06 : 0.04, isFormula ? 0.2 : 0.16, isFormula ? 0.13 : 0.1), caliper)
     cal.position.set((i % 2 === 0 ? 1 : -1) * 0.02, 0.02, b.wheelRadius * 0.45)
     hub.add(cal)
     if (isFormula && armGeo && shaftGeo) {
@@ -722,7 +742,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       tireGeo.dispose()
       discGeo.dispose()
       plateMesh.geometry.dispose()
-      for (const m of [paint, glassMat, trim, carbon, chrome, lampOn, tailMat, rubber, disc, caliper, formulaPaint]) m.dispose()
+      for (const m of [paint, glassMat, trim, carbon, chrome, lampOn, tailMat, rubber, sidewall, disc, caliper, formulaPaint]) m.dispose()
       root.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.geometry.dispose()
