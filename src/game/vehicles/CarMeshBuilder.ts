@@ -340,10 +340,12 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   if (highDetail) {
     for (const s of [-1, 1]) {
       const spot = new THREE.SpotLight(0xfff1d0, 0, 60, 0.55, 0.6, 1.2)
-      spot.position.set(s * hw * 0.6, noseTopY, half - 0.1)
-      spot.target.position.set(s * hw * 0.6, -1.5, half + 25)
+      // Parented to the root (not the LOD detail group) so the beams keep
+      // working when the shell is hidden in cockpit view.
+      spot.position.set(s * hw * 0.6, noseTopY + bodyOffsetY, half - 0.1)
+      spot.target.position.set(s * hw * 0.6, -1.5 + bodyOffsetY, half + 25)
       spot.castShadow = false
-      detail.add(spot, spot.target)
+      root.add(spot, spot.target)
       headlightSpots.push(spot)
     }
   }

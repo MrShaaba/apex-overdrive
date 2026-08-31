@@ -21,6 +21,7 @@ import { SkySystem } from '../render/Sky'
 import { WeatherSystem } from '../render/Weather'
 import { PostPipeline } from '../render/PostProcessing'
 import { CameraRig } from '../render/CameraRig'
+import { CockpitWheel } from '../render/CockpitWheel'
 import { QualityManager } from '../render/QualityManager'
 import { Showcase } from '../render/Showcase'
 import { AudioEngine } from '../audio/AudioEngine'
@@ -69,6 +70,7 @@ export class Engine {
   weather!: WeatherSystem
   post!: PostPipeline
   readonly cameraRig = new CameraRig(16 / 9)
+  private cockpitWheel: CockpitWheel | null = null
   audio: AudioEngine | null = null
   readonly qualityManager = new QualityManager()
   showcase!: Showcase
@@ -144,6 +146,10 @@ export class Engine {
       this.precipitation = new PrecipitationSystem(this.textures, Math.round(this.quality.particleBudget * 1.2))
       this.scene.add(this.precipitation.points)
       this.post = new PostPipeline(this.renderer, this.scene, this.cameraRig.camera, this.quality)
+      // The rig camera joins the scene so camera-parented objects (cockpit wheel) render.
+      this.scene.add(this.cameraRig.camera)
+      this.cockpitWheel = new CockpitWheel()
+      this.cameraRig.camera.add(this.cockpitWheel.root)
       this.showcase = new Showcase(this.textures)
       for (let i = 0; i < 6; i++) {
         const l = new THREE.PointLight(0xffe6b0, 0, 40, 1.6)
@@ -865,6 +871,7 @@ export class Engine {
   }
 
   private updateShowcase(dt: number): void {
+    this.cockpitWheel?.setVisible(false)
     const input = this.input.update(dt)
     const dragging = Math.abs(input.cameraOrbitX) > 0.0005
     this.showcase.autoRotate = !dragging
@@ -1022,6 +1029,22 @@ export class Engine {
       cockpitOffset: new THREE.Vector3(-0.35, player.spec.body.height * 0.55 - player.spec.comHeight + 0.35, player.spec.body.length * 0.05),
     }, { x: input.cameraOrbitX, y: input.cameraOrbitY })
 
+    // No modelled interior exists, so in cockpit view the player's own shell
+    // and detail meshes are hidden — otherwise the windshield glass slices
+    // the view at eye level and washes out the display. The wheels stay
+    // visible for an open-wheeler feel; headlight spots live on the root.
+    player.visual.lod.visible = this.cameraRig.mode !== 'cockpit'
+    this.cockpitWheel?.update(dt, this.cameraRig.mode === 'cockpit' ? {
+      steerAngle: t.steerAngle,
+      maxSteerAngle: THREE.MathUtils.degToRad(player.spec.steering.maxAngle),
+      gear: t.gear,
+      speedKmh: t.speedKmh,
+      rpm: t.rpm,
+      redline: player.tuned.engine.redline,
+      limiter: t.limiter,
+      units: this.settings.controls.units,
+    } : null)
+
     this.sky.update(simDt, w, player.position, this.cameraRig.camera.getWorldDirection(new THREE.Vector3()))
     this.updateStreetLights()
     this.particles.update(simDt)
@@ -1054,6 +1077,8 @@ export class Engine {
   }
 
   private updateReplay(dt: number): void {
+    this.cockpitWheel?.setVisible(false)
+    if (this.player) this.player.visual.lod.visible = true
     if (this.replayPlaying) {
       this.replayTime += dt * this.replaySpeed
       if (this.replayTime >= this.replay.length) {
@@ -1207,6 +1232,7 @@ export class Engine {
     cancelAnimationFrame(this.rafId)
     for (const d of this.disposeListeners) d()
     void this.unloadSession()
+    this.cockpitWheel?.dispose()
     this.showcase.dispose()
     this.particles.dispose()
     this.precipitation.dispose()
