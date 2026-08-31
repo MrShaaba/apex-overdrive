@@ -274,6 +274,53 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
     defaultPaint: '#1a2140',
     defaultAccent: '#ff6a00',
   },
+  {
+    id: 'formula-comet',
+    name: 'Comet GP-7',
+    brand: 'Comet Racing',
+    vehicleClass: 'formula',
+    tagline: 'Chase the tail of light.',
+    description:
+      'Comet Racing sells this customer single-seater to anyone brave enough. A touch heavier than the Vortex but with a fatter torque curve out of slow corners — pick your poison, both end in a blur.',
+    price: 560000,
+    unlockLevel: 18,
+    tier: 5,
+    body: { shape: 'formula', length: 4.95, width: 1.9, height: 0.95, wheelbase: 3.25, trackWidth: 1.6, wheelRadius: 0.33, wheelWidth: 0.36, groundClearance: 0.05, rearOverhang: 0.8 },
+    mass: 782,
+    comHeight: 0.285,
+    engine: { type: 'hybrid', maxTorque: 660, peakRpm: 10200, redline: 12400, idleRpm: 2400, cylinders: 10, turbo: true, supercharged: false, turboGain: 0.42, turboSpool: 4.6, soundProfile: 'v10' },
+    gearbox: { ratios: [3.15, 2.42, 1.96, 1.63, 1.39, 1.2, 1.05, 0.92], finalDrive: 3.5, reverseRatio: 3.2, shiftTime: 0.045, drivetrain: 'RWD', rearBias: 1 },
+    suspension: { stiffness: 102000, dampingCompression: 7000, dampingRebound: 9000, restLength: 0.16, travel: 0.085, antiRoll: 27000 },
+    tires: { compound: 'slick', gripFront: 1.49, gripRear: 1.51, peakSlipAngle: 0.092, peakSlipRatio: 0.092, falloff: 0.74, rollingResistance: 0.0102 },
+    brakes: { maxTorque: 5700, frontBias: 0.57, handbrakeTorque: 4000 },
+    aero: { dragCoefficient: 0.45, frontalArea: 1.5, downforceFront: 1.55, downforceRear: 2.35 },
+    steering: { maxAngle: 26, speedSensitivity: 0.85, responseRate: 15 },
+    performance: { topSpeed: 334, fuelCapacity: 110, fuelConsumption: 1.22, nitroCapacity: 125, nitroPower: 0.29 },
+    defaultPaint: '#b1001a',
+    defaultAccent: '#ffd60a',
+  },
+]
+
+/** Invented formula teams: AI formula fields draw liveries from this table
+ * (two cars per team, like a real grid) so the field is readable from behind.
+ * All names and colour schemes are original — no real-world teams. */
+export interface FormulaTeam {
+  name: string
+  paint: string
+  accent: string
+  livery: 'none' | 'stripes' | 'flames' | 'camo' | 'racing' | 'hex' | 'splash' | 'carbon' | 'retro'
+  liveryColor: string
+}
+
+export const FORMULA_TEAMS: FormulaTeam[] = [
+  { name: 'Vortex Grand Prix', paint: '#1a2140', accent: '#ff6a00', livery: 'stripes', liveryColor: '#ff6a00' },
+  { name: 'Comet Racing', paint: '#b1001a', accent: '#ffd60a', livery: 'racing', liveryColor: '#ffffff' },
+  { name: 'Boreal Motorsport', paint: '#f4f4f0', accent: '#3d8bff', livery: 'stripes', liveryColor: '#3d8bff' },
+  { name: 'Ember GP', paint: '#ff6a00', accent: '#0c0d10', livery: 'flames', liveryColor: '#ffd60a' },
+  { name: 'Meridian Racing', paint: '#0f4d2e', accent: '#c8b27a', livery: 'racing', liveryColor: '#c8b27a' },
+  { name: 'Titan Works', paint: '#4a4f57', accent: '#ff2d95', livery: 'hex', liveryColor: '#dfe3ea' },
+  { name: 'Aurora Apex', paint: '#7b3cff', accent: '#5af5e0', livery: 'hex', liveryColor: '#5af5e0' },
+  { name: 'Sable Corse', paint: '#0c0d10', accent: '#d0102a', livery: 'stripes', liveryColor: '#d0102a' },
 ]
 
 export const VEHICLE_BY_ID: Record<string, VehicleSpec> = Object.fromEntries(VEHICLE_CATALOG.map((v) => [v.id, v]))

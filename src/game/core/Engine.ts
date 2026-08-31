@@ -29,7 +29,7 @@ import { saveManager } from '../persistence/SaveManager'
 import { buildTrack, type BuiltTrack } from '../tracks/TrackBuilder'
 import { getTrackDefinition, TRACK_CATALOG, type WeatherKind } from '../tracks/TrackCatalog'
 import { Vehicle } from '../vehicles/Vehicle'
-import { getVehicleSpec, VEHICLE_CATALOG } from '../vehicles/VehicleCatalog'
+import { FORMULA_TEAMS, getVehicleSpec, VEHICLE_CATALOG } from '../vehicles/VehicleCatalog'
 import { defaultCustomization, defaultUpgrades, type VehicleCustomization } from '../vehicles/VehicleSpec'
 import { generateField, type DriverProfile } from '../ai/DriverProfiles'
 import { RacingLine } from '../ai/RacingLine'
@@ -434,17 +434,33 @@ export class Engine {
         this.player = v
         continue
       }
-      const driver = this.aiProfiles[this.vehicles.length - (this.player ? 1 : 0)] ?? this.aiProfiles[0]
-      // Assign a car of similar performance to the player, preferring the driver's favourite.
-      const pool = VEHICLE_CATALOG.filter((c) => Math.abs(c.tier - playerSpec.tier) <= 1)
+      const aiIdx = this.vehicles.length - (this.player ? 1 : 0)
+      const driver = this.aiProfiles[aiIdx] ?? this.aiProfiles[0]
+      // A formula player races a spec-series field of other formula cars, and
+      // road cars never draw formula traffic. Otherwise assign a car of
+      // similar performance, preferring the driver's favourite.
+      const formulaField = playerSpec.vehicleClass === 'formula'
+      const pool = VEHICLE_CATALOG.filter((c) => (formulaField ? c.vehicleClass === 'formula' : c.vehicleClass !== 'formula' && Math.abs(c.tier - playerSpec.tier) <= 1))
       let spec = pool.find((c) => c.id === driver.favouriteCar && !usedCars.has(c.id)) ?? pool[Math.floor(Math.random() * pool.length)]
       if (usedCars.size >= pool.length) spec = pool[Math.floor(Math.random() * pool.length)]
       usedCars.add(spec.id)
       const custom = defaultCustomization(spec)
-      custom.paint = driver.color
-      custom.livery = (['racing', 'stripes', 'hex', 'none', 'splash'] as const)[Math.floor(Math.random() * 5)]
-      custom.liveryColor = '#ffffff'
-      custom.raceNumber = 2 + Math.floor(Math.random() * 97)
+      // Formula AI liveries come from the invented team table (two cars per
+      // team) so the field is readable from behind; road cars keep the
+      // driver-coloured random liveries.
+      const team = formulaField ? FORMULA_TEAMS[Math.floor(aiIdx / 2) % FORMULA_TEAMS.length] : null
+      if (team) {
+        custom.paint = team.paint
+        custom.accent = team.accent
+        custom.livery = team.livery
+        custom.liveryColor = team.liveryColor
+        custom.raceNumber = 2 + ((aiIdx * 11) % 97)
+      } else {
+        custom.paint = driver.color
+        custom.livery = (['racing', 'stripes', 'hex', 'none', 'splash'] as const)[Math.floor(Math.random() * 5)]
+        custom.liveryColor = '#ffffff'
+        custom.raceNumber = 2 + Math.floor(Math.random() * 97)
+      }
       custom.plate = driver.name.split(' ')[0].toUpperCase().slice(0, 7)
       const upgrades = defaultUpgrades()
       const lvl = Math.round(driver.skill * 3)
@@ -456,7 +472,7 @@ export class Engine {
         upgrades,
         isPlayer: false,
         name: driver.name,
-        color: driver.color,
+        color: team ? team.paint : driver.color,
         position: grid.position,
         quaternion: grid.quaternion,
         highDetail: this.quality.propDensity >= 0.7,
