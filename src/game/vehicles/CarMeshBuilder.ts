@@ -148,10 +148,13 @@ function crossSection(profile: ShapeProfile, u: number, hw: number, height: numb
     new THREE.Vector2(0, topY + 0.005),
   ]
   const curve = new THREE.SplineCurve(ctrl)
-  const half = curve.getPoints(ringPoints / 2 - 1)
+  const half = curve.getPoints(ringPoints / 2)
   const ring: THREE.Vector2[] = []
+  // Top centre → down the left flank → bottom centre → up the right flank.
+  // Both centreline points are emitted once so the ring has exactly ringPoints
+  // vertices — the loft indexes with stride ringPoints and wraps via modulo.
   for (let i = half.length - 1; i >= 0; i--) ring.push(new THREE.Vector2(-half[i].x, half[i].y))
-  for (let i = 1; i < half.length; i++) ring.push(half[i].clone())
+  for (let i = 1; i < half.length - 1; i++) ring.push(half[i].clone())
   return ring
 }
 
@@ -192,7 +195,7 @@ function loftBody(spec: VehicleSpec, stations: number, ringPoints: number): { ge
       const d = (s + 1) * n + ((i + 1) % n)
       const isGlass = glassFlags[s][i] && glassFlags[s + 1][i] && glassFlags[s][(i + 1) % n]
       const target = isGlass ? glassIdx : bodyIdx
-      target.push(a, c, bIdx, bIdx, c, d)
+      target.push(a, bIdx, c, bIdx, d, c)
       if (isGlass) glassMask[a] = glassMask[bIdx] = glassMask[c] = glassMask[d] = 1
     }
   }
