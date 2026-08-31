@@ -301,6 +301,28 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   // Solid-colour team paint for formula bodywork that shouldn't sample the
   // livery texture (sidepods, flaps) — box UVs would show random canvas crops.
   const formulaPaint = new THREE.MeshPhysicalMaterial({ color: custom.paint, metalness: 0.65, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15, envMapIntensity: 1.2 })
+  // Carbon fibre for formula aero surfaces: a small cached twill weave under a
+  // clearcoat, subtle enough to sit in the low-poly world but clearly woven up
+  // close and glossy under the environment map.
+  const carbonWeave = textures.get(
+    'carbon-weave',
+    (ctx, size) => {
+      ctx.fillStyle = '#17191d'
+      ctx.fillRect(0, 0, size, size)
+      const n = 8
+      const cell = size / n
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          ctx.fillStyle = (x + y) % 2 ? '#232730' : '#101216'
+          ctx.fillRect(x * cell, y * cell, cell, cell)
+          ctx.fillStyle = (x + y) % 2 ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)'
+          ctx.fillRect(x * cell, y * cell, cell, cell * 0.45)
+        }
+      }
+    },
+    { size: 128, repeat: [3, 3] },
+  )
+  const formulaCarbon = new THREE.MeshPhysicalMaterial({ map: carbonWeave, color: 0xbfc4cc, metalness: 0.5, roughness: 0.42, clearcoat: 0.75, clearcoatRoughness: 0.18, envMapIntensity: 1.15 })
 
   // --- Body lofts (hi / lo) ---
   const hi = loftBody(spec, highDetail ? 44 : 26, highDetail ? 36 : 20)
@@ -465,11 +487,11 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   if (isFormula) {
     // --- Formula bodywork (all detail-group, y = 0 at the ground) ---------
     // Floor plank and rear diffuser.
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.025, b.length * 0.6), carbon)
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.025, b.length * 0.6), formulaCarbon)
     floor.position.set(0, b.groundClearance + 0.012, -0.2)
     floor.receiveShadow = true
     detail.add(floor)
-    const dif = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.5), carbon)
+    const dif = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.5), formulaCarbon)
     dif.position.set(0, b.groundClearance + 0.07, -half + 0.2)
     dif.rotation.x = -0.25
     detail.add(dif)
@@ -488,7 +510,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     }
     // Front wing: main plane + raised flap + accent endplates, ahead of the nose.
     const span = b.trackWidth + b.wheelWidth * 0.4
-    const fwMain = new THREE.Mesh(new THREE.BoxGeometry(span, 0.03, 0.42), carbon)
+    const fwMain = new THREE.Mesh(new THREE.BoxGeometry(span, 0.03, 0.42), formulaCarbon)
     fwMain.position.set(0, 0.1, half - 0.08)
     fwMain.castShadow = true
     detail.add(fwMain)
@@ -500,17 +522,17 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       const ep = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.16, 0.5), caliper)
       ep.position.set(s * span * 0.5, 0.14, half - 0.1)
       detail.add(ep)
-      const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.22), carbon)
+      const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.22), formulaCarbon)
       pylon.position.set(s * 0.12, 0.18, half - 0.3)
       detail.add(pylon)
     }
     // Rear wing: main plane, lower beam wing, accent endplates, swan pylon.
-    const rwMain = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.03, 0.36), carbon)
+    const rwMain = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.03, 0.36), formulaCarbon)
     rwMain.position.set(0, 0.84, -half + 0.22)
     rwMain.rotation.x = 0.22
     rwMain.castShadow = true
     detail.add(rwMain)
-    const rwBeam = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.025, 0.2), carbon)
+    const rwBeam = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.025, 0.2), formulaCarbon)
     rwBeam.position.set(0, 0.62, -half + 0.16)
     rwBeam.rotation.x = 0.35
     detail.add(rwBeam)
@@ -519,15 +541,15 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       ep.position.set(s * 0.54, 0.72, -half + 0.2)
       detail.add(ep)
     }
-    const rwPylon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.44, 0.05), carbon)
+    const rwPylon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.44, 0.05), formulaCarbon)
     rwPylon.position.set(0, 0.6, -half + 0.3)
     detail.add(rwPylon)
     // Airbox intake above the helmet and a fin down the engine cover.
     const intake = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.16), trim)
     intake.position.set(0, 0.82, -0.22)
     detail.add(intake)
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.3, 1.2), caliper)
-    fin.position.set(0, 0.62, -1.5)
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, 0.9), formulaPaint)
+    fin.position.set(0, 0.56, -1.45)
     fin.rotation.x = -0.24
     detail.add(fin)
     // Cockpit: padded opening rim and the driver's helmet (accent colour).
@@ -553,11 +575,11 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     exhausts.push(new THREE.Vector3(0, 0.5 + bodyOffsetY, -half + 0.25))
     // Halo. Parented to the root, not the detail group, so it stays visible
     // as the cockpit frame when the shell is hidden in cockpit view.
-    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 18), carbon)
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 18), formulaCarbon)
     hoop.rotation.x = Math.PI / 2
     hoop.position.set(0, 0.76 + bodyOffsetY, 0.1)
     root.add(hoop)
-    const haloPylon = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.34, 8), carbon)
+    const haloPylon = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.34, 8), formulaCarbon)
     haloPylon.rotation.x = -0.07
     haloPylon.position.set(0, 0.6 + bodyOffsetY, 0.44)
     root.add(haloPylon)
@@ -623,7 +645,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       // they steer and travel with the wheel.
       const inboard = i % 2 === 0 ? 1 : -1
       for (const [ay, az] of [[0.1, 0.11], [0.1, -0.11], [-0.07, 0.11], [-0.07, -0.11]] as const) {
-        const arm = new THREE.Mesh(armGeo, carbon)
+        const arm = new THREE.Mesh(armGeo, formulaCarbon)
         arm.rotation.set(0, inboard * az * 2.0, Math.PI / 2)
         arm.position.set(inboard * 0.26, ay, az * 0.5)
         hub.add(arm)
@@ -742,7 +764,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       tireGeo.dispose()
       discGeo.dispose()
       plateMesh.geometry.dispose()
-      for (const m of [paint, glassMat, trim, carbon, chrome, lampOn, tailMat, rubber, sidewall, disc, caliper, formulaPaint]) m.dispose()
+      for (const m of [paint, glassMat, trim, carbon, chrome, lampOn, tailMat, rubber, sidewall, disc, caliper, formulaPaint, formulaCarbon]) m.dispose()
       root.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.geometry.dispose()
