@@ -106,6 +106,7 @@ export class Engine {
   private lightningWasHigh = false
   private lightPool: THREE.PointLight[] = []
   private aiProfiles: DriverProfile[] = []
+  private playerDrs: 'none' | 'available' | 'active' = 'none'
   /** When true the player's car is driven by an AI brain (attract mode / QA). */
   autopilot = false
   private disposeListeners: (() => void)[] = []
@@ -1012,8 +1013,25 @@ export class Engine {
       if (this.ghost.sample(lapTime, this.ghostVisual.root.position, this.ghostVisual.root.quaternion)) this.ghostVisual.root.visible = race.phase === 'racing'
     }
 
-    // Camera.
     const t = player.telemetry
+
+    // Pit-lane limiter: engages automatically for anyone in the lane and
+    // releases once the exit line (end of the pit zone) is passed.
+    for (const v of this.vehicles) {
+      const r = race.racers.get(v.id)
+      v.controller.speedLimitKmh = r?.inPitLane ? 96.5 : null
+    }
+    // DRS: available inside a designated zone, active while flat out there.
+    let drs: 'none' | 'available' | 'active' = 'none'
+    const pr = race.player
+    if (pr && !pr.inPitLane && track.drsZones.length && (race.phase === 'racing' || race.phase === 'freeroam')) {
+      const inZone = track.drsZones.some((z) => (z.from <= z.to ? pr.progress > z.from && pr.progress < z.to : pr.progress > z.from || pr.progress < z.to))
+      if (inZone) drs = t.speedKmh > 80 && player.input.throttle > 0.85 && player.input.brake < 0.1 && !t.airborne ? 'active' : 'available'
+    }
+    this.playerDrs = drs
+    player.controller.drsActive = drs === 'active'
+
+    // Camera.
     this.cameraRig.update(dt, {
       position: player.visual.root.position,
       quaternion: player.visual.root.quaternion,
@@ -1045,6 +1063,8 @@ export class Engine {
       units: this.settings.controls.units,
       ers: player.controller.getNitroFraction(),
       ersMode: t.nitroActive ? 'deploy' : t.harvesting ? 'harvest' : 'idle',
+      drs: this.playerDrs,
+      pitLimiter: race.player?.inPitLane ?? false,
     } : null)
 
     this.sky.update(simDt, w, player.position, this.cameraRig.camera.getWorldDirection(new THREE.Vector3()))
@@ -1201,6 +1221,8 @@ export class Engine {
         hour: this.sky.hour,
         fps: this.qualityManager.fps,
         inPit: r?.inPit ?? false,
+        pitLimiter: r?.inPitLane ?? false,
+        drs: this.playerDrs,
         cameraMode: this.cameraRig.mode,
         isNight: this.sky.nightFactor > 0.5,
         wetness: this.weather.state.wetness,

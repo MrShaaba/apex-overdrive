@@ -912,6 +912,22 @@ input[type='text']:focus {
   background: linear-gradient(90deg, #2fae62, #7dff9f);
   box-shadow: 0 0 8px rgba(84, 224, 130, 0.6);
 }
+.hud__drs--none {
+  color: #566072;
+  opacity: 0.75;
+}
+.hud__drs--available {
+  color: #ffd60a;
+  box-shadow: 0 0 10px rgba(255, 214, 10, 0.35);
+}
+.hud__drs--active {
+  color: #54e082;
+  box-shadow: 0 0 12px rgba(84, 224, 130, 0.55);
+}
+.hud__pitlimit {
+  color: #ffd60a;
+  box-shadow: 0 0 10px rgba(255, 214, 10, 0.35);
+}
 .hud__bar-fill--fuel {
   background: linear-gradient(90deg, var(--gold), #ff9f1c);
 }

@@ -141,6 +141,10 @@ export function HUD() {
             <div className="hud__drift-mult">×{hud.driftMultiplier.toFixed(1)} DRIFT</div>
           </div>
         )}
+        <div className="row" style={{ justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+          <span className={`hud__chip hud__drs hud__drs--${hud.drs}`}>{hud.drs === 'active' ? 'DRS ACTIVE' : hud.drs === 'available' ? 'DRS AVAILABLE' : 'DRS NOT AVAILABLE'}</span>
+          {hud.pitLimiter && <span className="hud__chip hud__pitlimit">⛽ PIT LIMITER · 60 MPH</span>}
+        </div>
         <div className="hud__bars">
           <div className="hud__bar">
             <div className="hud__label">

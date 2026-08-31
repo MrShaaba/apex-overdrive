@@ -61,6 +61,11 @@ export interface BuiltTrack {
   sectorDistances: number[]
   pitZone: { from: number; to: number; side: number } | null
   tunnelZones: { from: number; to: number }[]
+  /**
+   * DRS zones in metres of arc length, auto-detected on the longest
+   * low-curvature stretches. A zone with from > to wraps the start line.
+   */
+  drsZones: { from: number; to: number }[]
   crowdZones: CrowdZone[]
   tracksideCameras: THREE.Vector3[]
   hazards: HazardSystem
@@ -703,6 +708,48 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     pitZone = { from: spline.sampleAt(from).distance, to: spline.sampleAt(to).distance, side: p.side }
   }
 
+  // ---------------------------------------------------------------------------
+  // DRS zones — auto-detected on the longest low-curvature stretches so every
+  // track gets sensible straights without per-track data.
+  // ---------------------------------------------------------------------------
+  const drsZones: { from: number; to: number }[] = []
+  {
+    const flat = spline.samples.map((s) => Math.abs(s.curvature) < 0.0055)
+    const runs: { start: number; len: number }[] = []
+    let runStart = -1
+    for (let i = 0; i < flat.length; i++) {
+      if (flat[i] && runStart < 0) runStart = i
+      else if (!flat[i] && runStart >= 0) {
+        runs.push({ start: runStart, len: i - runStart })
+        runStart = -1
+      }
+    }
+    if (runStart >= 0) runs.push({ start: runStart, len: flat.length - runStart })
+    // On a closed lap the main straight usually spans the start line — merge
+    // the runs touching both ends into one wrapping run.
+    const last = runs[runs.length - 1]
+    if (def.closed && runs.length > 1 && runs[0].start === 0 && last.start + last.len === flat.length) {
+      runs.pop()
+      runs[0] = { start: last.start, len: last.len + runs[0].len }
+    }
+    runs.sort((a, b) => b.len - a.len)
+    const stripeMat = new THREE.MeshStandardMaterial({ color: 0x17d068, emissive: 0x17d068, emissiveIntensity: 0.55, roughness: 0.5 })
+    disposables.push(stripeMat)
+    const sampleSpacing = spline.length / spline.count
+    for (const r of runs.slice(0, 2)) {
+      if (r.len * sampleSpacing < 150) continue
+      const fromIdx = (r.start + 12) % spline.count
+      const toIdx = (r.start + r.len - 3) % spline.count
+      drsZones.push({ from: spline.sampleAt(fromIdx).distance, to: spline.sampleAt(toIdx).distance })
+      // Painted activation line across the road at the zone start.
+      const a = Math.min(fromIdx, spline.count - 3)
+      const geo = buildRibbon(spline, { halfWidthAt: () => halfWidth, lift: 0.035, from: a, to: a + 2 })
+      const stripe = new THREE.Mesh(geo, stripeMat)
+      root.add(stripe)
+      disposables.push(geo)
+    }
+  }
+
   // Jump ramps.
   for (const j of jumps) {
     const s = spline.atT(j.at)
@@ -812,6 +859,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     sectorDistances,
     pitZone,
     tunnelZones,
+    drsZones,
     crowdZones: props.crowdZones,
     tracksideCameras,
     hazards,

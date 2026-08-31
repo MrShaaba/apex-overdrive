@@ -192,6 +192,10 @@ export class VehicleController {
   assists: VehicleAssists = { abs: true, tcs: true, esc: false, autoTransmission: true }
   fuelEnabled = true
   damageEnabled = true
+  /** Automatic speed limiter (km/h) while in the pit lane; null = off. */
+  speedLimitKmh: number | null = null
+  /** DRS open: less drag and rear downforce, a little extra top speed. */
+  drsActive = false
 
   constructor(
     private readonly physics: PhysicsWorld,
@@ -493,6 +497,16 @@ export class VehicleController {
       }
     } else this.reverseDwell = 0
 
+    // Automatic pit-lane speed limiter: holds the car at the limit by cutting
+    // throttle, braking gently when it enters too hot.
+    if (this.speedLimitKmh !== null && this.gear > 0) {
+      const over = forwardSpeed * 3.6 - this.speedLimitKmh
+      if (over > 0) {
+        throttle = 0
+        if (over > 4) brake = Math.max(brake, 0.35)
+      } else if (over > -6) throttle = Math.min(throttle, clamp01(-over / 6))
+    }
+
     const ratio = this.gear > 0 ? g.ratios[this.gear - 1] : this.gear < 0 ? -g.reverseRatio : 0
     const driveWheels = this.wheels.filter((w) => w.isDriven)
     let avgOmega = 0
@@ -790,17 +804,20 @@ export class VehicleController {
     // --- Aero ----------------------------------------------------------------
     const aero = spec.aero
     if (speed > 0.1) {
-      const dragMag = 0.5 * RHO_AIR * aero.dragCoefficient * aero.frontalArea * speed * speed
+      // DRS: open rear wing sheds drag and rear downforce and buys a little
+      // extra top speed on the straights.
+      const drsDrag = this.drsActive ? 0.62 : 1
+      const dragMag = 0.5 * RHO_AIR * aero.dragCoefficient * aero.frontalArea * speed * speed * drsDrag
       const drag = _v.copy(_linvel).multiplyScalar(-dragMag / speed)
       // Soft top-speed limiter matches the design figure regardless of gearing.
-      const vmax = spec.performance.topSpeed / 3.6
+      const vmax = (spec.performance.topSpeed / 3.6) * (this.drsActive ? 1.06 : 1)
       if (forwardSpeed > vmax) drag.addScaledVector(_fwd, -spec.mass * (forwardSpeed - vmax) * 1.5)
       if (forwardSpeed < -9) drag.addScaledVector(_fwd, -spec.mass * (forwardSpeed + 9) * 2)
       body.addForce({ x: drag.x, y: drag.y, z: drag.z }, true)
 
       const vLongSq = forwardSpeed * forwardSpeed
       const dfF = aero.downforceFront * vLongSq
-      const dfR = aero.downforceRear * vLongSq
+      const dfR = aero.downforceRear * vLongSq * (this.drsActive ? 0.5 : 1)
       const fPt = _v2.set(0, 0, this.frontAxleZ).applyQuaternion(_q).add(_pos)
       const rPt = _v3.set(0, 0, this.rearAxleZ).applyQuaternion(_q).add(_pos)
       const down = _v.copy(_up).multiplyScalar(-1)

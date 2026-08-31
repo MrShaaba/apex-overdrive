@@ -38,6 +38,8 @@ export interface RacerState {
   driftScore: number
   damage: number
   inPit: boolean
+  /** In the pit lane laterally, regardless of speed — drives the auto limiter. */
+  inPitLane: boolean
   pitTimer: number
   lastValidPose: GridSlot
   lastProgressSample: number
@@ -111,6 +113,7 @@ export class RaceManager {
       driftScore: 0,
       damage: 0,
       inPit: false,
+      inPitLane: false,
       pitTimer: 0,
       lastValidPose: gridSlot,
       lastProgressSample: 0,
@@ -210,8 +213,11 @@ export class RaceManager {
       const pit = this.track.pitZone
       if (pit && this.phase === 'racing') {
         const inRange = r.progress > pit.from && r.progress < pit.to
-        const inLane = Math.sign(p.lateral) === pit.side && Math.abs(p.lateral) > this.track.halfWidth + 1.5
-        const inPit = inRange && inLane && o.speedKmh < 90
+        const inLane = Math.sign(p.lateral) === pit.side && Math.abs(p.lateral) > this.track.halfWidth + 1.5 && Math.abs(p.lateral) < this.track.halfWidth + 12
+        // Lane membership alone (no speed gate) — the engine hangs the
+        // automatic 60 mph limiter off this, released once past the exit line.
+        r.inPitLane = inRange && inLane
+        const inPit = inRange && inLane && o.speedKmh < 100
         if (inPit) {
           r.pitTimer += dt
           onPitService?.(o.id, dt)

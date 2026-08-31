@@ -24,6 +24,8 @@ export interface WheelTelemetry {
   /** ERS battery charge 0..1. */
   ers: number
   ersMode: 'deploy' | 'harvest' | 'idle'
+  drs: 'none' | 'available' | 'active'
+  pitLimiter: boolean
 }
 
 /** Visual rim rotation at full steering input. */
@@ -123,7 +125,7 @@ export class CockpitWheel {
     dash.add(trim)
     this.root.add(dash)
 
-    this.paint({ steerAngle: 0, maxSteerAngle: 1, gear: 0, speedKmh: 0, rpm: 0, redline: 8000, limiter: false, units: 'kmh', ers: 1, ersMode: 'idle' })
+    this.paint({ steerAngle: 0, maxSteerAngle: 1, gear: 0, speedKmh: 0, rpm: 0, redline: 8000, limiter: false, units: 'kmh', ers: 1, ersMode: 'idle', drs: 'none', pitLimiter: false })
   }
 
   private geo<T extends THREE.BufferGeometry>(g: T): T {
@@ -153,7 +155,7 @@ export class CockpitWheel {
     const rpmT = clamp01(data.rpm / Math.max(1, data.redline))
     const leds = Math.round(clamp01((rpmT - 0.5) / 0.48) * LED_COUNT)
     const speed = Math.round(data.units === 'mph' ? data.speedKmh * 0.621371 : data.speedKmh)
-    const key = `${data.gear}|${speed}|${leds}|${data.limiter}|${data.units}|${Math.round(data.ers * 100)}|${data.ersMode}`
+    const key = `${data.gear}|${speed}|${leds}|${data.limiter}|${data.units}|${Math.round(data.ers * 100)}|${data.ersMode}|${data.drs}|${data.pitLimiter}`
     if (key !== this.lastPaintKey || this.repaintTimer > 0.15) {
       this.lastPaintKey = key
       this.repaintTimer = 0
@@ -218,11 +220,11 @@ export class CockpitWheel {
     ctx.font = '700 22px system-ui, sans-serif'
     ctx.fillText(`${Math.round(data.rpm)} RPM`, w / 2, 246)
 
-    // ERS battery bar along the bottom: cyan when deploying, green while
-    // harvesting, orange at rest.
+    // Bottom row: ERS battery bar (cyan deploy / green harvest / orange rest)
+    // with a DRS or PIT status chip beside it.
     const barX = 38
     const barY = 272
-    const barW = w - 76
+    const barW = 300
     const barH = 34
     const color = data.ersMode === 'deploy' ? '#7ef0ff' : data.ersMode === 'harvest' ? '#54e082' : '#ff9d45'
     ctx.strokeStyle = '#38414c'
@@ -233,7 +235,20 @@ export class CockpitWheel {
     ctx.fillStyle = '#ffffff'
     ctx.font = '800 24px system-ui, sans-serif'
     const ersLabel = data.ersMode === 'deploy' ? 'DEPLOY' : data.ersMode === 'harvest' ? 'CHARGING' : 'ERS'
-    ctx.fillText(`${ersLabel} ${Math.round(clamp01(data.ers) * 100)}%`, w / 2, barY + barH / 2 + 1)
+    ctx.fillText(`${ersLabel} ${Math.round(clamp01(data.ers) * 100)}%`, barX + barW / 2, barY + barH / 2 + 1)
+
+    const chipX = barX + barW + 12
+    const chipW = w - 38 - chipX
+    const chipColor = data.pitLimiter ? '#ffd60a' : data.drs === 'active' ? '#54e082' : data.drs === 'available' ? '#ffd60a' : '#2a323d'
+    ctx.strokeStyle = chipColor
+    ctx.strokeRect(chipX, barY, chipW, barH)
+    if (data.pitLimiter || data.drs === 'active') {
+      ctx.fillStyle = chipColor
+      ctx.fillRect(chipX + 3, barY + 3, chipW - 6, barH - 6)
+      ctx.fillStyle = '#07090d'
+    } else ctx.fillStyle = data.drs === 'available' ? chipColor : '#4a5563'
+    ctx.font = '800 24px system-ui, sans-serif'
+    ctx.fillText(data.pitLimiter ? 'PIT' : 'DRS', chipX + chipW / 2, barY + barH / 2 + 1)
 
     this.tex.needsUpdate = true
   }
