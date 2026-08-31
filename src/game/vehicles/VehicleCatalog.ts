@@ -249,6 +249,31 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
     defaultPaint: '#12b3a6',
     defaultAccent: '#ff6a00',
   },
+  {
+    id: 'formula-vortex',
+    name: 'Vortex FW-1',
+    brand: 'Vortex Grand Prix',
+    vehicleClass: 'formula',
+    tagline: 'Downforce is a promise.',
+    description:
+      'A pure single-seater: carbon monocoque, open cockpit behind a halo, wings front and rear and slick tyres on exposed suspension. The fastest way around any circuit — if you can keep the heat in the tyres.',
+    price: 520000,
+    unlockLevel: 16,
+    tier: 5,
+    body: { shape: 'formula', length: 5.0, width: 1.9, height: 0.95, wheelbase: 3.3, trackWidth: 1.62, wheelRadius: 0.33, wheelWidth: 0.36, groundClearance: 0.05, rearOverhang: 0.8 },
+    mass: 770,
+    comHeight: 0.28,
+    engine: { type: 'hybrid', maxTorque: 640, peakRpm: 10800, redline: 12600, idleRpm: 2400, cylinders: 10, turbo: true, supercharged: false, turboGain: 0.4, turboSpool: 5, soundProfile: 'v10' },
+    gearbox: { ratios: [3.1, 2.4, 1.95, 1.62, 1.38, 1.19, 1.03, 0.9], finalDrive: 3.4, reverseRatio: 3.2, shiftTime: 0.04, drivetrain: 'RWD', rearBias: 1 },
+    suspension: { stiffness: 105000, dampingCompression: 7200, dampingRebound: 9200, restLength: 0.16, travel: 0.08, antiRoll: 28000 },
+    tires: { compound: 'slick', gripFront: 1.5, gripRear: 1.52, peakSlipAngle: 0.09, peakSlipRatio: 0.09, falloff: 0.72, rollingResistance: 0.01 },
+    brakes: { maxTorque: 5800, frontBias: 0.56, handbrakeTorque: 4000 },
+    aero: { dragCoefficient: 0.44, frontalArea: 1.5, downforceFront: 1.5, downforceRear: 2.3 },
+    steering: { maxAngle: 26, speedSensitivity: 0.85, responseRate: 16 },
+    performance: { topSpeed: 338, fuelCapacity: 110, fuelConsumption: 1.2, nitroCapacity: 120, nitroPower: 0.3 },
+    defaultPaint: '#1a2140',
+    defaultAccent: '#ff6a00',
+  },
 ]
 
 export const VEHICLE_BY_ID: Record<string, VehicleSpec> = Object.fromEntries(VEHICLE_CATALOG.map((v) => [v.id, v]))
@@ -272,4 +297,5 @@ export const VEHICLE_CLASS_LABEL: Record<VehicleSpec['vehicleClass'], string> = 
   vintage: 'Vintage Coupe',
   track: 'Track Special',
   prototype: 'Endurance Prototype',
+  formula: 'Formula',
 }

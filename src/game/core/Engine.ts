@@ -374,6 +374,7 @@ export class Engine {
       this.raceStartTime = this.elapsed
       this.cameraRig.setMode(this.settings.gameplay.defaultCamera === 'cinematic' ? 'chase' : this.settings.gameplay.defaultCamera)
       this.cameraRig.fovBase = this.settings.graphics.fovBase
+      this.cockpitWheel?.setDash(this.player?.spec.body.shape !== 'formula')
       this.post.setCamera(this.cameraRig.camera)
       this.scene.remove(this.showcase.root)
       this.mode = 'race'
@@ -1044,7 +1045,10 @@ export class Engine {
       boosting: t.nitroActive,
       bodyHeight: player.spec.body.height,
       bodyLength: player.spec.body.length,
-      cockpitOffset: new THREE.Vector3(-0.35, player.spec.body.height * 0.55 - player.spec.comHeight + 0.35, player.spec.body.length * 0.05),
+      cockpitOffset: player.spec.body.shape === 'formula'
+        ? new THREE.Vector3(0, 0.54, 0.02)
+        : new THREE.Vector3(-0.35, player.spec.body.height * 0.55 - player.spec.comHeight + 0.35, player.spec.body.length * 0.05),
+      hoodOffset: player.spec.body.shape === 'formula' ? new THREE.Vector3(0, 1.02 - player.spec.comHeight, -0.3) : undefined,
     }, { x: input.cameraOrbitX, y: input.cameraOrbitY })
 
     // No modelled interior exists, so in cockpit view the player's own shell

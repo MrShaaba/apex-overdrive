@@ -127,6 +127,19 @@ const PROFILES: Record<BodyShape, ShapeProfile> = {
     roofWidth: 0.5,
     bottom: () => 0,
   },
+  // Open-wheel single-seater: a narrow low tub (width() is a fraction of
+  // spec width, so the wheels at ±trackWidth/2 sit fully outboard), a hump
+  // over the cockpit/airbox and a tapering nose. The degenerate cabin keeps
+  // cabinBlend below the glass threshold, so no greenhouse is generated;
+  // wings, halo and suspension are separate meshes.
+  formula: {
+    belt: (u) => 0.3 - 0.08 * smoothstep(0.65, 1, u),
+    top: (u) => 0.42 + 0.5 * bump(u, 0.3, 0.48, 0.1) - 0.12 * smoothstep(0.72, 1, u) - 0.06 * (1 - smoothstep(0, 0.18, u)),
+    width: (u) => 0.34 + 0.1 * bump(u, 0.12, 0.55, 0.15) - 0.16 * smoothstep(0.75, 1, u),
+    cabin: [0.5, 0.5],
+    roofWidth: 0.95,
+    bottom: () => 0,
+  },
 }
 
 /** Build a smoothed closed cross-section (full ring) for the body at station u. */
@@ -284,6 +297,9 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   const rubber = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.92, metalness: 0 })
   const disc = new THREE.MeshStandardMaterial({ color: 0x777b82, metalness: 0.85, roughness: 0.5 })
   const caliper = new THREE.MeshStandardMaterial({ color: custom.accent, metalness: 0.4, roughness: 0.4 })
+  // Solid-colour team paint for formula bodywork that shouldn't sample the
+  // livery texture (sidepods, flaps) — box UVs would show random canvas crops.
+  const formulaPaint = new THREE.MeshPhysicalMaterial({ color: custom.paint, metalness: 0.65, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15, envMapIntensity: 1.2 })
 
   // --- Body lofts (hi / lo) ---
   const hi = loftBody(spec, highDetail ? 44 : 26, highDetail ? 36 : 20)
@@ -302,46 +318,19 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
   const hw = b.width / 2
   const topH = b.height
 
-  // Splitter / front bumper.
-  const bumperDepth = custom.bumper === 'race' ? 0.22 : custom.bumper === 'widebody' ? 0.18 : custom.bumper === 'street' ? 0.12 : 0.06
-  const splitter = new THREE.Mesh(new THREE.BoxGeometry(b.width * 0.96, 0.04, 0.3 + bumperDepth), carbon)
-  splitter.position.set(0, b.groundClearance + 0.02, half - 0.05 + bumperDepth * 0.5)
-  detail.add(splitter)
-  // Rear diffuser.
-  const diffuser = new THREE.Mesh(new THREE.BoxGeometry(b.width * 0.8, 0.12, 0.35), carbon)
-  diffuser.position.set(0, b.groundClearance + 0.06, -half + 0.12)
-  diffuser.rotation.x = -0.35
-  detail.add(diffuser)
-  // Side skirts for race/widebody.
-  if (custom.bumper !== 'stock') {
-    for (const s of [-1, 1]) {
-      const skirt = new THREE.Mesh(new THREE.BoxGeometry(custom.bumper === 'widebody' ? 0.16 : 0.08, 0.08, b.length * 0.55), carbon)
-      skirt.position.set(s * (hw - 0.02 + (custom.bumper === 'widebody' ? 0.06 : 0)), b.groundClearance + 0.04, 0)
-      detail.add(skirt)
-    }
-  }
-  // Grille.
-  const grille = new THREE.Mesh(new THREE.BoxGeometry(b.width * 0.42, (topH - b.groundClearance) * 0.16, 0.06), trim)
+  const isFormula = b.shape === 'formula'
   const noseTopY = b.groundClearance + (topH - b.groundClearance) * PROFILES[b.shape].belt(1)
-  grille.position.set(0, noseTopY * 0.62, half - 0.02)
-  detail.add(grille)
-
-  // Headlights.
   const headlights: THREE.Mesh[] = []
-  const lampGeo = new THREE.BoxGeometry(b.width * 0.16, (topH - b.groundClearance) * 0.09, 0.08)
-  for (const s of [-1, 1]) {
-    const lamp = new THREE.Mesh(lampGeo, lampOn.clone())
-    lamp.position.set(s * hw * 0.62, noseTopY * 0.95, half - 0.1)
-    lamp.rotation.y = -s * 0.5
-    detail.add(lamp)
-    headlights.push(lamp)
-  }
+  const taillights: THREE.Mesh[] = []
+  const exhausts: THREE.Vector3[] = []
+  // Headlight beams exist for every shape (formula cars get no lamp meshes
+  // but still need to light night races). Parented to the root (not the LOD
+  // detail group) so the beams keep working when the shell is hidden in
+  // cockpit view.
   const headlightSpots: THREE.SpotLight[] = []
   if (highDetail) {
     for (const s of [-1, 1]) {
       const spot = new THREE.SpotLight(0xfff1d0, 0, 60, 0.55, 0.6, 1.2)
-      // Parented to the root (not the LOD detail group) so the beams keep
-      // working when the shell is hidden in cockpit view.
       spot.position.set(s * hw * 0.6, noseTopY + bodyOffsetY, half - 0.1)
       spot.target.position.set(s * hw * 0.6, -1.5 + bodyOffsetY, half + 25)
       spot.castShadow = false
@@ -349,48 +338,84 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       headlightSpots.push(spot)
     }
   }
-  // Taillights.
-  const taillights: THREE.Mesh[] = []
-  const tailTopY = b.groundClearance + (topH - b.groundClearance) * PROFILES[b.shape].belt(0)
-  const tailGeo = new THREE.BoxGeometry(b.width * 0.3, (topH - b.groundClearance) * 0.07, 0.06)
-  for (const s of [-1, 1]) {
-    const t = new THREE.Mesh(tailGeo, tailMat.clone())
-    t.position.set(s * hw * 0.5, tailTopY * 0.98, -half + 0.08)
-    detail.add(t)
-    taillights.push(t)
-  }
-  // Mirrors.
-  const cabin = PROFILES[b.shape].cabin
-  const beltY = b.groundClearance + (topH - b.groundClearance) * PROFILES[b.shape].belt(cabin[1])
-  for (const s of [-1, 1]) {
-    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.16), paint)
-    mirror.position.set(s * (hw + 0.07), beltY + 0.05, lerp(-half, half, cabin[1] - 0.02))
-    detail.add(mirror)
-  }
-  // Exhausts.
-  const exhausts: THREE.Vector3[] = []
-  if (spec.engine.type !== 'ev') {
-    const n = spec.engine.cylinders >= 8 ? 4 : 2
-    for (let i = 0; i < n; i++) {
-      const x = (i - (n - 1) / 2) * 0.18 + (n === 2 ? 0 : 0) 
-      const side = n === 2 ? (i === 0 ? -1 : 1) * hw * 0.55 : x + (i < n / 2 ? -hw * 0.5 : hw * 0.5)
-      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.16, 12, 1, true), chrome)
-      tip.rotation.x = Math.PI / 2
-      tip.position.set(side, b.groundClearance + 0.12, -half - 0.02)
-      detail.add(tip)
-      exhausts.push(new THREE.Vector3(side, b.groundClearance + 0.12 + bodyOffsetY, -half - 0.1))
-    }
-  }
-  // Plate.
+  // Plate: built for every car so setCustomization can always retarget it,
+  // but only road cars mount it — single-seaters carry race numbers instead.
   const plateMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.48, 0.12), new THREE.MeshStandardMaterial({ map: textures.plate(custom.plate), roughness: 0.6 }))
   plateMesh.position.set(0, b.groundClearance + 0.28, -half - 0.005)
   plateMesh.rotation.y = Math.PI
-  detail.add(plateMesh)
+
+  if (!isFormula) {
+    // Splitter / front bumper.
+    const bumperDepth = custom.bumper === 'race' ? 0.22 : custom.bumper === 'widebody' ? 0.18 : custom.bumper === 'street' ? 0.12 : 0.06
+    const splitter = new THREE.Mesh(new THREE.BoxGeometry(b.width * 0.96, 0.04, 0.3 + bumperDepth), carbon)
+    splitter.position.set(0, b.groundClearance + 0.02, half - 0.05 + bumperDepth * 0.5)
+    detail.add(splitter)
+    // Rear diffuser.
+    const diffuser = new THREE.Mesh(new THREE.BoxGeometry(b.width * 0.8, 0.12, 0.35), carbon)
+    diffuser.position.set(0, b.groundClearance + 0.06, -half + 0.12)
+    diffuser.rotation.x = -0.35
+    detail.add(diffuser)
+    // Side skirts for race/widebody.
+    if (custom.bumper !== 'stock') {
+      for (const s of [-1, 1]) {
+        const skirt = new THREE.Mesh(new THREE.BoxGeometry(custom.bumper === 'widebody' ? 0.16 : 0.08, 0.08, b.length * 0.55), carbon)
+        skirt.position.set(s * (hw - 0.02 + (custom.bumper === 'widebody' ? 0.06 : 0)), b.groundClearance + 0.04, 0)
+        detail.add(skirt)
+      }
+    }
+    // Grille.
+    const grille = new THREE.Mesh(new THREE.BoxGeometry(b.width * 0.42, (topH - b.groundClearance) * 0.16, 0.06), trim)
+    grille.position.set(0, noseTopY * 0.62, half - 0.02)
+    detail.add(grille)
+
+    // Headlights.
+    const lampGeo = new THREE.BoxGeometry(b.width * 0.16, (topH - b.groundClearance) * 0.09, 0.08)
+    for (const s of [-1, 1]) {
+      const lamp = new THREE.Mesh(lampGeo, lampOn.clone())
+      lamp.position.set(s * hw * 0.62, noseTopY * 0.95, half - 0.1)
+      lamp.rotation.y = -s * 0.5
+      detail.add(lamp)
+      headlights.push(lamp)
+    }
+    // Taillights.
+    const tailTopY = b.groundClearance + (topH - b.groundClearance) * PROFILES[b.shape].belt(0)
+    const tailGeo = new THREE.BoxGeometry(b.width * 0.3, (topH - b.groundClearance) * 0.07, 0.06)
+    for (const s of [-1, 1]) {
+      const t = new THREE.Mesh(tailGeo, tailMat.clone())
+      t.position.set(s * hw * 0.5, tailTopY * 0.98, -half + 0.08)
+      detail.add(t)
+      taillights.push(t)
+    }
+    // Mirrors.
+    const cabin = PROFILES[b.shape].cabin
+    const beltY = b.groundClearance + (topH - b.groundClearance) * PROFILES[b.shape].belt(cabin[1])
+    for (const s of [-1, 1]) {
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.16), paint)
+      mirror.position.set(s * (hw + 0.07), beltY + 0.05, lerp(-half, half, cabin[1] - 0.02))
+      detail.add(mirror)
+    }
+    // Exhausts.
+    if (spec.engine.type !== 'ev') {
+      const n = spec.engine.cylinders >= 8 ? 4 : 2
+      for (let i = 0; i < n; i++) {
+        const x = (i - (n - 1) / 2) * 0.18 + (n === 2 ? 0 : 0)
+        const side = n === 2 ? (i === 0 ? -1 : 1) * hw * 0.55 : x + (i < n / 2 ? -hw * 0.5 : hw * 0.5)
+        const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.16, 12, 1, true), chrome)
+        tip.rotation.x = Math.PI / 2
+        tip.position.set(side, b.groundClearance + 0.12, -half - 0.02)
+        detail.add(tip)
+        exhausts.push(new THREE.Vector3(side, b.groundClearance + 0.12 + bodyOffsetY, -half - 0.1))
+      }
+    }
+    detail.add(plateMesh)
+  }
 
   // Wing.
   let wingGroup: THREE.Group | null = null
   const buildWing = (style: WingStyle): THREE.Group | null => {
-    if (style === 'none') return null
+    // Formula cars carry fixed front/rear wings as part of the body; the
+    // customization wing style only keeps its physics multipliers.
+    if (style === 'none' || isFormula) return null
     const g = new THREE.Group()
     const roofY = b.groundClearance + (topH - b.groundClearance) * PROFILES[b.shape].top(0.05)
     if (style === 'lip') {
@@ -436,12 +461,114 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     scoop.position.set(0, topH * 0.9, -half * 0.25)
     detail.add(scoop)
   }
+  if (isFormula) {
+    // --- Formula bodywork (all detail-group, y = 0 at the ground) ---------
+    // Floor plank and rear diffuser.
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.025, b.length * 0.6), carbon)
+    floor.position.set(0, b.groundClearance + 0.012, -0.2)
+    floor.receiveShadow = true
+    detail.add(floor)
+    const dif = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.5), carbon)
+    dif.position.set(0, b.groundClearance + 0.07, -half + 0.2)
+    dif.rotation.x = -0.25
+    detail.add(dif)
+    // Sidepods with dark radiator inlets and mirrors on the cockpit sides.
+    for (const s of [-1, 1]) {
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.24, 1.6), formulaPaint)
+      pod.position.set(s * 0.46, b.groundClearance + 0.15, -0.55)
+      pod.castShadow = true
+      detail.add(pod)
+      const inlet = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.06), trim)
+      inlet.position.set(s * 0.46, b.groundClearance + 0.17, 0.28)
+      detail.add(inlet)
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.05), trim)
+      mirror.position.set(s * 0.32, 0.52, 0.52)
+      detail.add(mirror)
+    }
+    // Front wing: main plane + raised flap + accent endplates, ahead of the nose.
+    const span = b.trackWidth + b.wheelWidth * 0.4
+    const fwMain = new THREE.Mesh(new THREE.BoxGeometry(span, 0.03, 0.42), carbon)
+    fwMain.position.set(0, 0.1, half - 0.08)
+    fwMain.castShadow = true
+    detail.add(fwMain)
+    const fwFlap = new THREE.Mesh(new THREE.BoxGeometry(span * 0.88, 0.022, 0.2), formulaPaint)
+    fwFlap.position.set(0, 0.17, half - 0.24)
+    fwFlap.rotation.x = 0.3
+    detail.add(fwFlap)
+    for (const s of [-1, 1]) {
+      const ep = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.16, 0.5), caliper)
+      ep.position.set(s * span * 0.5, 0.14, half - 0.1)
+      detail.add(ep)
+      const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.22), carbon)
+      pylon.position.set(s * 0.12, 0.18, half - 0.3)
+      detail.add(pylon)
+    }
+    // Rear wing: main plane, lower beam wing, accent endplates, swan pylon.
+    const rwMain = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.03, 0.36), carbon)
+    rwMain.position.set(0, 0.84, -half + 0.22)
+    rwMain.rotation.x = 0.22
+    rwMain.castShadow = true
+    detail.add(rwMain)
+    const rwBeam = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.025, 0.2), carbon)
+    rwBeam.position.set(0, 0.62, -half + 0.16)
+    rwBeam.rotation.x = 0.35
+    detail.add(rwBeam)
+    for (const s of [-1, 1]) {
+      const ep = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.36, 0.5), caliper)
+      ep.position.set(s * 0.54, 0.72, -half + 0.2)
+      detail.add(ep)
+    }
+    const rwPylon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.44, 0.05), carbon)
+    rwPylon.position.set(0, 0.6, -half + 0.3)
+    detail.add(rwPylon)
+    // Airbox intake above the helmet and a fin down the engine cover.
+    const intake = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.16), trim)
+    intake.position.set(0, 0.82, -0.22)
+    detail.add(intake)
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.3, 1.2), caliper)
+    fin.position.set(0, 0.62, -1.5)
+    fin.rotation.x = -0.24
+    detail.add(fin)
+    // Cockpit: padded opening rim and the driver's helmet (accent colour).
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.9), trim)
+    pad.position.set(0, 0.52, 0.12)
+    detail.add(pad)
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 10), caliper)
+    helmet.position.set(0, 0.63, 0.12)
+    helmet.castShadow = true
+    detail.add(helmet)
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.04), trim)
+    visor.position.set(0, 0.64, 0.24)
+    detail.add(visor)
+    // Rain light (doubles as the brake light) and a single central exhaust.
+    const rain = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.04), tailMat.clone())
+    rain.position.set(0, 0.4, -half + 0.06)
+    detail.add(rain)
+    taillights.push(rain)
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.2, 10, 1, true), chrome)
+    tip.rotation.x = Math.PI / 2 - 0.25
+    tip.position.set(0, 0.5, -half + 0.35)
+    detail.add(tip)
+    exhausts.push(new THREE.Vector3(0, 0.5 + bodyOffsetY, -half + 0.25))
+    // Halo. Parented to the root, not the detail group, so it stays visible
+    // as the cockpit frame when the shell is hidden in cockpit view.
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 18), carbon)
+    hoop.rotation.x = Math.PI / 2
+    hoop.position.set(0, 0.76 + bodyOffsetY, 0.1)
+    root.add(hoop)
+    const haloPylon = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.34, 8), carbon)
+    haloPylon.rotation.x = -0.07
+    haloPylon.position.set(0, 0.6 + bodyOffsetY, 0.44)
+    root.add(haloPylon)
+  }
 
   // --- Wheels ---
   const wheels: THREE.Group[] = []
   const wheelSpin: THREE.Object3D[] = []
   const tireGeo = new THREE.CylinderGeometry(b.wheelRadius, b.wheelRadius, b.wheelWidth, highDetail ? 28 : 14, 1, false)
   const discGeo = new THREE.CylinderGeometry(b.wheelRadius * 0.58, b.wheelRadius * 0.58, 0.03, 20)
+  const armGeo = isFormula ? new THREE.CylinderGeometry(0.016, 0.016, 0.46, 6) : null
+  const shaftGeo = isFormula ? new THREE.CylinderGeometry(0.026, 0.026, 0.42, 8) : null
   for (let i = 0; i < 4; i++) {
     const hub = new THREE.Group()
     const spin = new THREE.Group()
@@ -470,6 +597,24 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     const cal = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.1), caliper)
     cal.position.set((i % 2 === 0 ? 1 : -1) * 0.02, 0.02, b.wheelRadius * 0.45)
     hub.add(cal)
+    if (isFormula && armGeo && shaftGeo) {
+      // Exposed suspension: upper/lower wishbone rods fanning inboard toward
+      // the tub, plus a driveshaft on the rear axle. Parented to the hub so
+      // they steer and travel with the wheel.
+      const inboard = i % 2 === 0 ? 1 : -1
+      for (const [ay, az] of [[0.1, 0.11], [0.1, -0.11], [-0.07, 0.11], [-0.07, -0.11]] as const) {
+        const arm = new THREE.Mesh(armGeo, carbon)
+        arm.rotation.set(0, inboard * az * 2.0, Math.PI / 2)
+        arm.position.set(inboard * 0.26, ay, az * 0.5)
+        hub.add(arm)
+      }
+      if (i >= 2) {
+        const shaft = new THREE.Mesh(shaftGeo, chrome)
+        shaft.rotation.z = Math.PI / 2
+        shaft.position.set(inboard * 0.24, 0, 0)
+        hub.add(shaft)
+      }
+    }
     root.add(hub)
     wheels.push(hub)
     wheelSpin.push(spin)
@@ -512,6 +657,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       paint.needsUpdate = true
       glassMat.opacity = 0.55 + c.windowTint * 0.4
       caliper.color.set(c.accent)
+      formulaPaint.color.set(c.paint)
       ;(plateMesh.material as THREE.MeshStandardMaterial).map = textures.plate(c.plate)
       ;(plateMesh.material as THREE.MeshStandardMaterial).needsUpdate = true
       if (wingGroup) {
@@ -575,7 +721,8 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
       lo.geometry.dispose()
       tireGeo.dispose()
       discGeo.dispose()
-      for (const m of [paint, glassMat, trim, carbon, chrome, lampOn, tailMat, rubber, disc, caliper]) m.dispose()
+      plateMesh.geometry.dispose()
+      for (const m of [paint, glassMat, trim, carbon, chrome, lampOn, tailMat, rubber, disc, caliper, formulaPaint]) m.dispose()
       root.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.geometry.dispose()

@@ -22,6 +22,8 @@ export interface CameraTarget {
   bodyHeight: number
   bodyLength: number
   cockpitOffset: THREE.Vector3
+  /** Optional hood/T-cam override in car-local space (used by open-wheelers). */
+  hoodOffset?: THREE.Vector3
 }
 
 const CYCLE: CameraMode[] = ['chase', 'chaseFar', 'hood', 'cockpit', 'cinematic']
@@ -115,20 +117,22 @@ export class CameraRig {
       case 'chaseFar': {
         const far = this.mode === 'chaseFar'
         const dist = (far ? 9.5 : 7.2) + speedFactor * (far ? 1.5 : 1.2) + target.bodyLength * 0.35
-        const height = (far ? 3.4 : 2.6) + speedFactor * 0.2
+        // Scale camera height with the car so low open-wheelers fill the frame.
+        const height = (far ? 3.4 : 2.6) + speedFactor * 0.2 + (target.bodyHeight - 1.3) * 1.1
         _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.orbitYaw)
         _tmp.copy(_flatFwd).applyQuaternion(_q)
         _desired.copy(target.position).addScaledVector(_tmp, -dist)
         _desired.y = target.position.y + height
         _look.copy(target.position).addScaledVector(_tmp, 3 + speedFactor * 4)
-        _look.y += 0.6
+        _look.y += 0.35 + target.bodyHeight * 0.18
         fovTarget = this.fovBase + speedFactor * 18 + (target.boosting ? 6 : 0)
         lagRate = far ? 5 : 7 - speedFactor * 1.5
         rollTarget = -target.gLat * 0.02
         break
       }
       case 'hood': {
-        _desired.copy(target.position).addScaledVector(target.forward, target.bodyLength * 0.28).addScaledVector(target.up, target.bodyHeight * 0.45)
+        if (target.hoodOffset) _desired.copy(target.position).add(_tmp.copy(target.hoodOffset).applyQuaternion(target.quaternion))
+        else _desired.copy(target.position).addScaledVector(target.forward, target.bodyLength * 0.28).addScaledVector(target.up, target.bodyHeight * 0.45)
         _look.copy(_desired).addScaledVector(target.forward, 20)
         fovTarget = this.fovBase + 4 + speedFactor * 12
         lagRate = 40

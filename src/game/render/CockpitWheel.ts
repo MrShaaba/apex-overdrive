@@ -43,6 +43,7 @@ export class CockpitWheel {
   private rimAngle = 0
   private repaintTimer = 0
   private lastPaintKey = ''
+  private dash!: THREE.Group
 
   constructor() {
     this.root.name = 'cockpit-wheel'
@@ -115,7 +116,7 @@ export class CockpitWheel {
     // view reads as the inside of the car (the body shell is hidden in
     // cockpit view — there is no modelled interior).
     const cowlMat = this.mat(new THREE.MeshStandardMaterial({ color: 0x0d0f13, roughness: 0.95, metalness: 0.05 }))
-    const dash = new THREE.Group()
+    const dash = (this.dash = new THREE.Group())
     dash.position.set(0, -0.44, -0.45)
     dash.rotation.x = 0.45
     const plate = new THREE.Mesh(this.geo(new THREE.BoxGeometry(1.7, 0.03, 0.55)), cowlMat)
@@ -165,6 +166,12 @@ export class CockpitWheel {
 
   setVisible(visible: boolean): void {
     this.root.visible = visible
+  }
+
+  /** Road cars show the wide dashboard plate; open formula cockpits hide it
+   * so the halo and tub read as the cockpit frame instead. */
+  setDash(visible: boolean): void {
+    this.dash.visible = visible
   }
 
   private paint(data: WheelTelemetry): void {

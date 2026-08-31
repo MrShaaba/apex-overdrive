@@ -12,6 +12,7 @@ export class Showcase {
   readonly root = new THREE.Group()
   private car: CarVisual | null = null
   private carId = ''
+  private carHeight = 1.3
   private readonly turntable = new THREE.Group()
   private angle = 0
   autoRotate = true
@@ -81,6 +82,7 @@ export class Showcase {
     this.car = buildCarVisual(spec, custom, this.textures, true)
     this.carId = spec.id
     this.customKey = key
+    this.carHeight = spec.body.height
     // Position the visual so the wheels sit on the podium.
     this.car.root.position.y = spec.comHeight
     this.car.wheels.forEach((w, i) => {
@@ -99,7 +101,9 @@ export class Showcase {
   }
 
   get cameraTarget(): THREE.Vector3 {
-    return new THREE.Vector3(0, 0.9, 0)
+    // Aim at the visual centre of the car on the podium (podium top at 0.25),
+    // so low open-wheelers sit centred in frame rather than below it.
+    return new THREE.Vector3(0, 0.25 + this.carHeight * 0.5, 0)
   }
 
   dispose(): void {

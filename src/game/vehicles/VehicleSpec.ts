@@ -6,11 +6,11 @@
  * never drift from the simulation.
  */
 
-export type VehicleClass = 'gt' | 'supercar' | 'roadster' | 'drift' | 'rally' | 'ev' | 'vintage' | 'track' | 'prototype'
+export type VehicleClass = 'gt' | 'supercar' | 'roadster' | 'drift' | 'rally' | 'ev' | 'vintage' | 'track' | 'prototype' | 'formula'
 export type Drivetrain = 'RWD' | 'AWD' | 'FWD'
 export type EngineType = 'ice' | 'ev' | 'hybrid'
 export type TireCompound = 'street' | 'sport' | 'semi-slick' | 'slick' | 'rally' | 'winter'
-export type BodyShape = 'gt' | 'supercar' | 'roadster' | 'drift' | 'hatch' | 'ev' | 'vintage' | 'track' | 'prototype'
+export type BodyShape = 'gt' | 'supercar' | 'roadster' | 'drift' | 'hatch' | 'ev' | 'vintage' | 'track' | 'prototype' | 'formula'
 
 export interface VehicleSpec {
   id: string
@@ -167,8 +167,10 @@ export function defaultCustomization(spec: VehicleSpec): VehicleCustomization {
     finish: 'metallic',
     rims: 'sport5',
     rimColor: '#c9ccd4',
-    tires: spec.tires.compound === 'rally' ? 'rally' : 'sport',
-    wing: spec.vehicleClass === 'track' || spec.vehicleClass === 'prototype' ? 'gt' : 'none',
+    tires: spec.tires.compound === 'rally' ? 'rally' : spec.vehicleClass === 'formula' ? 'slick' : 'sport',
+    // Formula cars carry their wings as part of the body shape, but the 'gt'
+    // style keeps the functional downforce/drag multipliers applied.
+    wing: spec.vehicleClass === 'track' || spec.vehicleClass === 'prototype' || spec.vehicleClass === 'formula' ? 'gt' : 'none',
     bumper: 'stock',
     livery: 'none',
     liveryColor: '#ffffff',
