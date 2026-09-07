@@ -101,6 +101,12 @@ export class PostPipeline {
   private flash = 0
   private time = 0
   enabled = true
+  /**
+   * Scales bloom strength. The garage studio lights are hot enough (thousands
+   * of candela a few metres from the car) that the bloom pass smears the whole
+   * showcase; the engine sets 0 there and 1 on track.
+   */
+  bloomScale = 1
   /** Use 8-bit render targets (fallback for GPUs/drivers that cannot blend into half-float targets). */
   ldr = false
 
@@ -244,7 +250,7 @@ export class PostPipeline {
     u.uSaturation.value = 1.08 - nightFactor * 0.1
     if (this.bloom) {
       // Only genuine HDR highlights (sun, lamps, neon, brake lights) bloom.
-      this.bloom.strength = 0.3 + nightFactor * 0.45
+      this.bloom.strength = (0.3 + nightFactor * 0.45) * this.bloomScale
       this.bloom.threshold = 1.0 - nightFactor * 0.15
     }
   }

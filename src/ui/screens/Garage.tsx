@@ -151,6 +151,11 @@ export function GarageScreen() {
             <Panel title={`${spec.brand} ${spec.name}`}>
               <div style={{ fontStyle: 'italic', color: 'var(--cyan)', marginBottom: 6 }}>{spec.tagline}</div>
               <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginTop: 0 }}>{spec.description}</p>
+              {spec.model && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, opacity: 0.8 }}>
+                  3D model: {spec.model.credit}. Livery and rims are part of the licensed model.
+                </div>
+              )}
               <div className="row" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
                 <Chip>{spec.engine.type === 'ev' ? 'Electric' : `${spec.engine.cylinders} cyl${spec.engine.turbo ? ' turbo' : ''}`}</Chip>
                 <Chip>{spec.gearbox.drivetrain}</Chip>

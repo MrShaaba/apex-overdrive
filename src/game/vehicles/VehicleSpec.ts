@@ -12,6 +12,26 @@ export type EngineType = 'ice' | 'ev' | 'hybrid'
 export type TireCompound = 'street' | 'sport' | 'semi-slick' | 'slick' | 'rally' | 'winter'
 export type BodyShape = 'gt' | 'supercar' | 'roadster' | 'drift' | 'hatch' | 'ev' | 'vintage' | 'track' | 'prototype' | 'formula'
 
+/**
+ * Optional licensed 3D model for a catalog car (see docs/ASSET_PIPELINE.md and
+ * tools/asset-pipeline/prepare-car.mjs). Positions are in metres in the
+ * model's own frame: +Z forward, +X right, y = 0 at the ground under the
+ * tyres, x/z = 0 at the wheelbase midpoint — the frame the pipeline bakes.
+ * When the file is missing or fails to load the procedural mesh is used.
+ */
+export interface CarModelRef {
+  /** Path under the app base URL, e.g. 'assets/models/cars/w13.glb'. */
+  file: string
+  /** Driver eye position for the cockpit camera. */
+  cockpitEye: [number, number, number]
+  /** T-cam (hood camera) position. */
+  tcam: [number, number, number]
+  /** Exhaust tips for flame / ERS particles. */
+  exhausts: [number, number, number][]
+  /** One-line credit shown in the garage (licence requirement). */
+  credit: string
+}
+
 export interface VehicleSpec {
   id: string
   name: string
@@ -22,6 +42,8 @@ export interface VehicleSpec {
   price: number
   unlockLevel: number
   tier: 1 | 2 | 3 | 4 | 5
+  /** Licensed glTF model; procedural body when absent. */
+  model?: CarModelRef
   body: {
     shape: BodyShape
     length: number

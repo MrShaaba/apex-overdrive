@@ -6,6 +6,7 @@
 import * as THREE from 'three'
 import type { TextureFactory } from './TextureFactory'
 import { buildCarVisual, type CarVisual } from '../vehicles/CarMeshBuilder'
+import { modelLibrary } from '../vehicles/CarModelLoader'
 import type { VehicleCustomization, VehicleSpec } from '../vehicles/VehicleSpec'
 
 export class Showcase {
@@ -19,6 +20,7 @@ export class Showcase {
   private readonly lights: THREE.Light[] = []
   private readonly floor: THREE.Mesh
   private customKey = ''
+  private modelWanted = ''
 
   constructor(private readonly textures: TextureFactory) {
     this.root.name = 'showcase'
@@ -75,6 +77,19 @@ export class Showcase {
       }
       return
     }
+    this.rebuild(spec, custom, key)
+    // Licensed models stream in behind the procedural stand-in and swap in
+    // when ready (if this car is still on the turntable).
+    const file = spec.model?.file ?? ''
+    this.modelWanted = file
+    if (file && !modelLibrary.get(file)) {
+      void modelLibrary.preload(file).then((ok) => {
+        if (ok && this.modelWanted === file && this.carId === spec.id) this.rebuild(spec, custom, key)
+      })
+    }
+  }
+
+  private rebuild(spec: VehicleSpec, custom: VehicleCustomization, key: string): void {
     if (this.car) {
       this.turntable.remove(this.car.root)
       this.car.dispose()

@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-07T20:32:31.764Z",
+  "generatedAt": "2026-09-07T20:45:32.688Z",
   "assets": [
+    {
+      "id": "model.cars.w13",
+      "type": "model",
+      "file": "models/cars/w13.glb",
+      "bytes": 9349616
+    },
     {
       "id": "hdri.nqweba_dawn_2k",
       "type": "hdri",

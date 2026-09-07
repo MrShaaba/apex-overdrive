@@ -35,9 +35,19 @@ Integration points:
   `.hdr`. It prints the sun longitude; `Engine.ts` (`SKY_HDRI`) passes that to
   `SkySystem.loadHdri()`, which PMREM-filters the panorama once, rotates it every frame so
   its sun matches the procedural sun, and dims it at night. Missing file → procedural bake.
-* **Models** — load with `GLTFLoader` (+ `DRACOLoader`/`KTX2Loader` from three's examples)
-  and return a `CarVisual`-compatible object from a loader that mirrors `buildCarVisual()`.
-  Keep the wheel hubs as separate nodes named `wheel_0..3` and the body as `body`.
+* **Models** — `node tools/asset-pipeline/prepare-car.mjs <car-id>` (configs at the top of the
+  script) turns a raw Sketchfab glTF into `public/assets/models/cars/<id>.glb`: it re-frames the
+  model (metres, +Z forward, ground at y = 0, x/z = 0 at the wheelbase midpoint), rigs the tyres
+  as `wheel_0..3` (FL, FR, RL, RR) with `wheel_N_spin` children, splits per-axle rim/brake meshes
+  into left/right halves by triangle position, groups the rest under `body` with
+  `cockpit_hidden` (the model's own steering wheel) and `light_brake` (emissive lamps), joins
+  primitives per material, drops `KHR_materials_transmission`, encodes textures to KTX2 with the
+  `basisu` CLI (UASTC colour 2048², UASTC normals 1024², ETC1S roughness/metal 1024², mipmapped)
+  and Draco-compresses the geometry. It prints wheelbase/track/radius for the catalog entry.
+  A catalog car opts in with `model: CarModelRef` (`VehicleSpec.ts`): `vehicles/CarModelLoader.ts`
+  preloads the file with `GLTFLoader` + `DRACOLoader` + `KTX2Loader` (decoders under
+  `public/libs/`) and `buildCarVisual()` clones it into a `CarVisual`; a missing file means the
+  procedural car. AI fields never draw licensed models.
 * **Textures** — `TextureFactory.get(key, painter)` can be pre-seeded: load the texture and
   insert it in the cache under the same key the generator would use (e.g. `road:#2e2f33`).
 * **Audio** — `AudioEngine` accepts decoded `AudioBuffer`s for one-shots; replace
@@ -46,7 +56,7 @@ Integration points:
 ## Budgets (enforced by `npm run assets:validate`)
 | Type | Max per file | Notes |
 |---|---|---|
-| model (`.glb`) | 2 MB | Draco/meshopt-compressed, ≤ 40k tris per car |
+| model (`.glb`) | 12 MB | Draco geometry + KTX2 textures (see prepare-car.mjs); licensed cars run ~100k tris |
 | texture (`.ktx2`, `.webp`, `.jpg`, `.png`) | 1 MB | ≤ 2048², prefer KTX2/Basis |
 | audio (`.ogg`, `.mp3`, `.webm`) | 500 kB | 44.1 kHz mono for positional sounds |
 | hdri (`.hdr`) | 8 MB | 2048×1024 RGBE, RLE (≈6 MB) |

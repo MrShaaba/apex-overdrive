@@ -299,6 +299,38 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
     defaultPaint: '#b1001a',
     defaultAccent: '#ffd60a',
   },
+  {
+    id: 'mercedes-w13',
+    name: 'W13 E Performance',
+    brand: 'Mercedes-AMG',
+    vehicleClass: 'formula',
+    tagline: 'The Silver Arrow, on rails.',
+    description:
+      'A licensed 3D model of the 2022 Silver Arrow concept: real rims and brake drums that steer and spin, halo, DRS flap and T-cam, driven by the same physics as the other single-seaters. Heavier than the Vortex but with the strongest hybrid deployment in the field.',
+    price: 640000,
+    unlockLevel: 16,
+    tier: 5,
+    model: {
+      file: 'assets/models/cars/w13.glb',
+      cockpitEye: [0, 0.84, 0.47],
+      tcam: [0, 1.27, -0.16],
+      exhausts: [[0, 0.55, -2.3]],
+      credit: '"F1 Mercedes W13 Concept" by Nick Broad on Sketchfab, CC-BY 4.0',
+    },
+    body: { shape: 'formula', length: 5.18, width: 2.0, height: 1.12, wheelbase: 3.4, trackWidth: 1.56, wheelRadius: 0.36, wheelWidth: 0.37, groundClearance: 0.05, rearOverhang: 0.89 },
+    mass: 798,
+    comHeight: 0.28,
+    engine: { type: 'hybrid', maxTorque: 700, peakRpm: 10500, redline: 12000, idleRpm: 2600, cylinders: 6, turbo: true, supercharged: false, turboGain: 0.45, turboSpool: 4.4, soundProfile: 'v10' },
+    gearbox: { ratios: [3.1, 2.4, 1.95, 1.62, 1.38, 1.19, 1.03, 0.9], finalDrive: 3.45, reverseRatio: 3.2, shiftTime: 0.04, drivetrain: 'RWD', rearBias: 1 },
+    suspension: { stiffness: 108000, dampingCompression: 7400, dampingRebound: 9400, restLength: 0.16, travel: 0.08, antiRoll: 29000 },
+    tires: { compound: 'slick', gripFront: 1.5, gripRear: 1.53, peakSlipAngle: 0.09, peakSlipRatio: 0.09, falloff: 0.72, rollingResistance: 0.01 },
+    brakes: { maxTorque: 5900, frontBias: 0.56, handbrakeTorque: 4000 },
+    aero: { dragCoefficient: 0.45, frontalArea: 1.5, downforceFront: 1.55, downforceRear: 2.4 },
+    steering: { maxAngle: 26, speedSensitivity: 0.85, responseRate: 16 },
+    performance: { topSpeed: 336, fuelCapacity: 110, fuelConsumption: 1.2, nitroCapacity: 130, nitroPower: 0.32 },
+    defaultPaint: '#101418',
+    defaultAccent: '#00d2be',
+  },
 ]
 
 /** Invented formula teams: AI formula fields draw liveries from this table

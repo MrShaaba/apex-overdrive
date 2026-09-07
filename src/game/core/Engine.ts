@@ -46,6 +46,7 @@ import { recordCareerResult, SERIES_TRACKS, starsForResult } from '../gameplay/C
 import { network } from '../net'
 import { gameStore, navigate, pushToast, bumpProfile, initialHud, type HudStanding, type MinimapCar } from '../state/GameStore'
 import { buildCarVisual, type CarVisual } from '../vehicles/CarMeshBuilder'
+import { modelLibrary } from '../vehicles/CarModelLoader'
 
 const log = Logger.scope('Engine')
 
@@ -136,6 +137,7 @@ export class Engine {
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
       this.textures.setScale(this.quality.textureScale)
       this.textures.setAnisotropy(Math.min(this.quality.anisotropy, this.renderer.capabilities.getMaxAnisotropy()))
+      modelLibrary.init(this.renderer)
 
       setLoading(0.3, 'Starting physics')
       this.physics = await PhysicsWorld.create()
@@ -367,6 +369,13 @@ export class Engine {
       this.scene.fog = this.sky.fog
       this.precipitation.setMode(this.weather.state.precipitation === 'snow' || env.snow ? 'snow' : 'rain', this.textures)
 
+      // Licensed player models stream in here; a missing file falls back to
+      // the procedural car inside buildCarVisual.
+      const playerSpec = getVehicleSpec(config.carId)
+      if (playerSpec.model) {
+        gameStore.set({ loading: { progress: 0.62, label: `Loading ${playerSpec.name}` } })
+        await modelLibrary.preload(playerSpec.model.file)
+      }
       gameStore.set({ loading: { progress: 0.7, label: 'Assembling the grid' } })
       await new Promise((r) => setTimeout(r, 16))
       await this.spawnField(config)
@@ -379,7 +388,7 @@ export class Engine {
       this.raceStartTime = this.elapsed
       this.cameraRig.setMode(this.settings.gameplay.defaultCamera === 'cinematic' ? 'chase' : this.settings.gameplay.defaultCamera)
       this.cameraRig.fovBase = this.settings.graphics.fovBase
-      this.cockpitWheel?.setDash(this.player?.spec.body.shape !== 'formula')
+      this.cockpitWheel?.setDash(this.player?.spec.body.shape !== 'formula' && !this.player?.spec.model)
       this.post.setCamera(this.cameraRig.camera)
       this.scene.remove(this.showcase.root)
       this.mode = 'race'
@@ -442,10 +451,11 @@ export class Engine {
       const aiIdx = this.vehicles.length - (this.player ? 1 : 0)
       const driver = this.aiProfiles[aiIdx] ?? this.aiProfiles[0]
       // A formula player races a spec-series field of other formula cars, and
-      // road cars never draw formula traffic. Otherwise assign a car of
-      // similar performance, preferring the driver's favourite.
+      // road cars never draw formula traffic. Licensed models stay with the
+      // player (the procedural team cars keep the field varied). Otherwise
+      // assign a car of similar performance, preferring the driver's favourite.
       const formulaField = playerSpec.vehicleClass === 'formula'
-      const pool = VEHICLE_CATALOG.filter((c) => (formulaField ? c.vehicleClass === 'formula' : c.vehicleClass !== 'formula' && Math.abs(c.tier - playerSpec.tier) <= 1))
+      const pool = VEHICLE_CATALOG.filter((c) => !c.model && (formulaField ? c.vehicleClass === 'formula' : c.vehicleClass !== 'formula' && Math.abs(c.tier - playerSpec.tier) <= 1))
       let spec = pool.find((c) => c.id === driver.favouriteCar && !usedCars.has(c.id)) ?? pool[Math.floor(Math.random() * pool.length)]
       if (usedCars.size >= pool.length) spec = pool[Math.floor(Math.random() * pool.length)]
       usedCars.add(spec.id)
@@ -904,6 +914,9 @@ export class Engine {
     this.showcaseCamera.position.set(Math.sin(t) * 1.2 + 7.2, 2.3 + Math.sin(t * 0.7) * 0.25, Math.cos(t * 0.9) * 1.2 + 7.2)
     this.showcaseCamera.lookAt(this.showcase.cameraTarget)
     this.scene.environmentIntensity = 0.7 * this.sky.envBoost
+    // Studio spotlights push HDR values far past the bloom threshold and the
+    // pass would smear the car into a blur, so bloom stays off in the garage.
+    this.post.bloomScale = 0
     this.post.setEnvironment(0.6, 0, 0, 'cool')
     this.post.setSpeed(0, false)
     this.particles.update(dt)
@@ -1066,17 +1079,22 @@ export class Engine {
       boosting: t.nitroActive,
       bodyHeight: player.spec.body.height,
       bodyLength: player.spec.body.length,
-      cockpitOffset: player.spec.body.shape === 'formula'
-        ? new THREE.Vector3(0, 0.54, 0.02)
-        : new THREE.Vector3(-0.35, player.spec.body.height * 0.55 - player.spec.comHeight + 0.35, player.spec.body.length * 0.05),
-      hoodOffset: player.spec.body.shape === 'formula' ? new THREE.Vector3(0, 1.02 - player.spec.comHeight, -0.3) : undefined,
+      cockpitOffset: player.spec.model
+        ? new THREE.Vector3(player.spec.model.cockpitEye[0], player.spec.model.cockpitEye[1] - player.spec.comHeight, player.spec.model.cockpitEye[2])
+        : player.spec.body.shape === 'formula'
+          ? new THREE.Vector3(0, 0.54, 0.02)
+          : new THREE.Vector3(-0.35, player.spec.body.height * 0.55 - player.spec.comHeight + 0.35, player.spec.body.length * 0.05),
+      hoodOffset: player.spec.model
+        ? new THREE.Vector3(player.spec.model.tcam[0], player.spec.model.tcam[1] - player.spec.comHeight, player.spec.model.tcam[2])
+        : player.spec.body.shape === 'formula' ? new THREE.Vector3(0, 1.02 - player.spec.comHeight, -0.3) : undefined,
     }, { x: input.cameraOrbitX, y: input.cameraOrbitY })
 
-    // No modelled interior exists, so in cockpit view the player's own shell
-    // and detail meshes are hidden — otherwise the windshield glass slices
+    // Procedural cars have no modelled interior, so in cockpit view their
+    // shell and detail meshes are hidden (licensed models hide only their own
+    // steering wheel) — otherwise the windshield glass slices
     // the view at eye level and washes out the display. The wheels stay
     // visible for an open-wheeler feel; headlight spots live on the root.
-    player.visual.lod.visible = this.cameraRig.mode !== 'cockpit'
+    for (const o of player.visual.cockpitHidden) o.visible = this.cameraRig.mode !== 'cockpit'
     this.cockpitWheel?.update(dt, this.cameraRig.mode === 'cockpit' ? {
       steerAngle: t.steerAngle,
       maxSteerAngle: THREE.MathUtils.degToRad(player.spec.steering.maxAngle),
@@ -1097,6 +1115,7 @@ export class Engine {
     this.particles.update(simDt)
     this.precipitation.update(dt, this.cameraRig.camera, this.cameraRig.velocity)
     this.post.setSpeed(clamp01(t.speedKmh / 320), t.nitroActive)
+    this.post.bloomScale = 1
     this.post.setEnvironment(this.sky.nightFactor, w.wetness * (this.cameraRig.mode === 'cockpit' ? 1 : 0.3), player.controller.getDamage(), this.sky.hour > 16 && this.sky.hour < 20 ? 'warm' : this.sky.nightFactor > 0.5 ? 'cool' : 'neutral')
 
     // Audio.
@@ -1125,7 +1144,7 @@ export class Engine {
 
   private updateReplay(dt: number): void {
     this.cockpitWheel?.setVisible(false)
-    if (this.player) this.player.visual.lod.visible = true
+    if (this.player) for (const o of this.player.visual.cockpitHidden) o.visible = true
     if (this.replayPlaying) {
       this.replayTime += dt * this.replaySpeed
       if (this.replayTime >= this.replay.length) {
@@ -1287,6 +1306,7 @@ export class Engine {
     this.particles.dispose()
     this.precipitation.dispose()
     this.sky.dispose()
+    modelLibrary.dispose()
     this.post.dispose()
     this.audio?.dispose()
     this.textures.dispose()

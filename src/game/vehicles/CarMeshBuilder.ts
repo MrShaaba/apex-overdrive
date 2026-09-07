@@ -14,6 +14,7 @@ import * as THREE from 'three'
 import type { TextureFactory } from '../render/TextureFactory'
 import type { BodyShape, RimStyle, VehicleCustomization, VehicleSpec, WingStyle } from './VehicleSpec'
 import { lerp, smoothstep } from '../core/MathUtils'
+import { buildModelCarVisual, modelLibrary } from './CarModelLoader'
 
 export interface CarVisual {
   root: THREE.Group
@@ -31,6 +32,9 @@ export interface CarVisual {
   exhausts: THREE.Vector3[]
   restPositions: Float32Array
   bodyOffsetY: number
+  /** Hidden while the player rides in cockpit view (the shell for procedural
+   * cars, which have no interior; a licensed model's own steering wheel). */
+  cockpitHidden: THREE.Object3D[]
   setCustomization(c: VehicleCustomization): void
   setLights(on: boolean, brake: boolean, reverse: boolean): void
   dent(localPoint: THREE.Vector3, localDir: THREE.Vector3, strength: number): void
@@ -281,6 +285,11 @@ function buildRim(style: RimStyle, radius: number, width: number, color: string)
 }
 
 export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, textures: TextureFactory, highDetail = true): CarVisual {
+  // Licensed model when its file has been preloaded; procedural otherwise.
+  if (spec.model) {
+    const template = modelLibrary.get(spec.model.file)
+    if (template) return buildModelCarVisual(spec, template, highDetail)
+  }
   const root = new THREE.Group()
   root.name = `car-${spec.id}`
   const b = spec.body
@@ -689,6 +698,7 @@ export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, 
     exhausts,
     restPositions,
     bodyOffsetY,
+    cockpitHidden: [lod],
     setCustomization(c) {
       paint.color.set(c.paint)
       Object.assign(paint, finishParams(c.finish))
