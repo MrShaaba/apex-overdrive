@@ -7,7 +7,7 @@ import { readdirSync, statSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, extname, sep } from 'node:path'
 
 const root = new URL('../../public/assets/', import.meta.url).pathname
-const types = { models: 'model', textures: 'texture', audio: 'audio', data: 'data' }
+const types = { models: 'model', textures: 'texture', audio: 'audio', data: 'data', hdri: 'hdri' }
 const assets = []
 
 function walk(dir, type) {
@@ -16,7 +16,7 @@ function walk(dir, type) {
     const full = join(dir, entry)
     const st = statSync(full)
     if (st.isDirectory()) walk(full, type)
-    else if (!entry.startsWith('.') && entry !== 'manifest.json') {
+    else if (!entry.startsWith('.') && entry !== 'manifest.json' && !/\.(txt|md)$/i.test(entry)) {
       const rel = relative(root, full).split(sep).join('/')
       const id = `${type}.${rel.split('/').slice(1).join('.').replace(extname(rel), '')}`
       assets.push({ id, type, file: rel, bytes: st.size })

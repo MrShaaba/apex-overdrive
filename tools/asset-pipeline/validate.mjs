@@ -17,6 +17,8 @@ const budgets = {
   texture: { max: 1024 * 1024, ext: ['.ktx2', '.webp', '.jpg', '.jpeg', '.png'] },
   audio: { max: 500 * 1024, ext: ['.ogg', '.mp3', '.webm', '.wav'] },
   data: { max: 2 * 1024 * 1024, ext: ['.json'] },
+  // 2048×1024 RGBE panorama, RLE-compressed (see convert-hdri.mjs).
+  hdri: { max: 8 * 1024 * 1024, ext: ['.hdr'] },
 }
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 let errors = 0

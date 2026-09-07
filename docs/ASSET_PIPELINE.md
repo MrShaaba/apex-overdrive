@@ -16,7 +16,9 @@ Quality-scaled: textures are created at `textureScale × base` resolution and ca
 `releaseUnused()` frees them between sessions.
 
 ## Overriding with external assets
-Place files under `public/assets/{models,textures,audio}` and register them in
+Raw downloads (Sketchfab glTF folders, Poly Haven EXRs) live in `assets-src/` at the repo
+root, which is **gitignored** — only compressed output under `public/assets/` is committed.
+Place converted files under `public/assets/{models,textures,audio,hdri}` and register them in
 `public/assets/manifest.json` (generate with `npm run assets:manifest`). The manifest maps
 logical ids to files:
 
@@ -28,6 +30,11 @@ logical ids to files:
 ```
 
 Integration points:
+* **Sky panorama** — `node tools/asset-pipeline/convert-hdri.mjs assets-src/hdri/x_4k.exr public/assets/hdri/x_2k.hdr`
+  decodes the EXR with three's `EXRLoader`, box-filters it to 2048×1024 and writes an RLE
+  `.hdr`. It prints the sun longitude; `Engine.ts` (`SKY_HDRI`) passes that to
+  `SkySystem.loadHdri()`, which PMREM-filters the panorama once, rotates it every frame so
+  its sun matches the procedural sun, and dims it at night. Missing file → procedural bake.
 * **Models** — load with `GLTFLoader` (+ `DRACOLoader`/`KTX2Loader` from three's examples)
   and return a `CarVisual`-compatible object from a loader that mirrors `buildCarVisual()`.
   Keep the wheel hubs as separate nodes named `wheel_0..3` and the body as `body`.
@@ -42,6 +49,7 @@ Integration points:
 | model (`.glb`) | 2 MB | Draco/meshopt-compressed, ≤ 40k tris per car |
 | texture (`.ktx2`, `.webp`, `.jpg`, `.png`) | 1 MB | ≤ 2048², prefer KTX2/Basis |
 | audio (`.ogg`, `.mp3`, `.webm`) | 500 kB | 44.1 kHz mono for positional sounds |
+| hdri (`.hdr`) | 8 MB | 2048×1024 RGBE, RLE (≈6 MB) |
 
 Recommended external tools: `gltf-transform` (`gltf-transform optimize in.glb out.glb
 --compress draco --texture-compress webp`), `toktx` for KTX2, `ffmpeg` for audio.

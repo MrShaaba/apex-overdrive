@@ -6,10 +6,18 @@
  * the sky into a PMREM environment map for reflections on car paint. The
  * environment is re-baked only when the light changes meaningfully, keeping
  * the cost negligible during a race.
+ *
+ * When an equirectangular .hdr panorama is available (`loadHdri`), it is
+ * PMREM-filtered once and used as the environment instead of the sky bake:
+ * real-world sky/ground detail lights the bodywork and shows in reflections.
+ * The panorama is rotated every frame so its sun stays aligned with the
+ * procedural sun, and dimmed with the time of day. The sky dome itself stays
+ * procedural (it is the visible background and follows the clock).
  */
 
 import * as THREE from 'three'
 import { Sky } from 'three/examples/jsm/objects/Sky.js'
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
 import { clamp, clamp01, lerp, smoothstep } from '../core/MathUtils'
 import type { TrackEnvironment } from '../tracks/TrackCatalog'
 import type { WeatherVisualState } from './Weather'
@@ -26,6 +34,17 @@ export class SkySystem {
   nightFactor = 0
   private pmrem: THREE.PMREMGenerator
   private envTarget: THREE.WebGLRenderTarget | null = null
+  private hdrTarget: THREE.WebGLRenderTarget | null = null
+  /** Equirect longitude (radians, three's `equirectUv` convention) of the sun in the loaded panorama. */
+  private hdrSunLongitude = 0
+  /**
+   * Multiplier on the panorama's brightness (the sky bake is untouched). The
+   * bundled overcast-dawn panorama is much dimmer than the physical sky bake,
+   * so 2.5 keeps the world's exposure where it was while the soft cloud dome
+   * reads on bodywork; beyond ~4 the grass and track wash out.
+   */
+  hdriIntensity = 2.5
+  private hdriEnabled = true
   private lastBakeHour = -99
   private lastBakeCloud = -1
   private bakeCooldown = 0
@@ -106,6 +125,53 @@ export class SkySystem {
     this.lastBakeHour = -99
   }
 
+  /**
+   * Load an equirectangular Radiance (.hdr) panorama as the image-based
+   * lighting environment. Resolves false (and keeps the procedural sky bake)
+   * if the file is missing or fails to parse, so the game runs without it.
+   * `sunLongitudeDeg` is the panorama's brightest texel expressed as
+   * (u - 0.5) * 360, printed by tools/asset-pipeline/convert-hdri.mjs.
+   */
+  async loadHdri(url: string, sunLongitudeDeg: number): Promise<boolean> {
+    try {
+      const tex = await new RGBELoader().loadAsync(url)
+      tex.mapping = THREE.EquirectangularReflectionMapping
+      const target = this.pmrem.fromEquirectangular(tex)
+      tex.dispose()
+      this.hdrTarget?.dispose()
+      this.hdrTarget = target
+      this.hdrSunLongitude = THREE.MathUtils.degToRad(sunLongitudeDeg)
+      // Re-apply on the next update so the new environment takes over at once.
+      this.lastBakeHour = -99
+      this.bakeCooldown = 0
+      return true
+    } catch (err) {
+      console.warn('[Sky] HDRI environment unavailable, using the procedural sky bake', err)
+      return false
+    }
+  }
+
+  get hasHdri(): boolean {
+    return this.hdrTarget !== null
+  }
+
+  /** Factor other systems apply when they set `scene.environmentIntensity` directly. */
+  get envBoost(): number {
+    return this.activeHdr ? this.hdriIntensity : 1
+  }
+
+  /** Switch between the panorama and the procedural sky bake (QA / options). */
+  setHdriEnabled(on: boolean): void {
+    if (this.hdriEnabled === on) return
+    this.hdriEnabled = on
+    this.lastBakeHour = -99
+    this.bakeCooldown = 0
+  }
+
+  private get activeHdr(): THREE.WebGLRenderTarget | null {
+    return this.hdriEnabled ? this.hdrTarget : null
+  }
+
   private computeSun(): void {
     const dayT = (this.hour / 24) * Math.PI * 2 - Math.PI / 2
     const elevation = Math.sin(dayT) * 70 + 8 // degrees; peak ~78° at noon, -62 at midnight
@@ -164,9 +230,25 @@ export class SkySystem {
       this.lastBakeCloud = cloud
       this.bakeCooldown = 1.5
     }
+    if (this.activeHdr) {
+      // Spin the panorama so its sun sits where the procedural sun is. The
+      // shader samples the map at R(y)·dir, which shifts longitudes by -ρ, so
+      // ρ = sunLongitude - panoramaSunLongitude puts the two suns together.
+      const sunLongitude = Math.atan2(this.sunPos.z, this.sunPos.x)
+      this.scene.environmentRotation.set(0, sunLongitude - this.hdrSunLongitude, 0)
+      // Real sky detail is brighter than the dome bake: keep the daytime level
+      // and fade further at night, when the dawn panorama would look wrong.
+      this.scene.environmentIntensity = lerp(0.08, 0.8, 1 - this.nightFactor) * lerp(1, 0.7, cloud) * this.hdriIntensity
+    }
   }
 
   private bakeEnvironment(): void {
+    const hdr = this.activeHdr
+    if (hdr) {
+      this.scene.environment = hdr.texture
+      return
+    }
+    this.scene.environmentRotation.set(0, 0, 0)
     try {
       const old = this.envTarget
       const sky = this.sky
@@ -191,6 +273,7 @@ export class SkySystem {
 
   dispose(): void {
     this.envTarget?.dispose()
+    this.hdrTarget?.dispose()
     this.pmrem.dispose()
     this.sky.geometry.dispose()
     ;(this.sky.material as THREE.Material).dispose()

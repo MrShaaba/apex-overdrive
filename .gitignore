@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw asset downloads (Sketchfab glTF, Poly Haven EXR) — compressed output lives under public/assets
+assets-src/

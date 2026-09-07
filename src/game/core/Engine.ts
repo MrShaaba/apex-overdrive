@@ -49,6 +49,9 @@ import { buildCarVisual, type CarVisual } from '../vehicles/CarMeshBuilder'
 
 const log = Logger.scope('Engine')
 
+/** Optional real-sky panorama for image-based lighting (see tools/asset-pipeline/convert-hdri.mjs). */
+const SKY_HDRI = { file: 'assets/hdri/nqweba_dawn_2k.hdr', sunLongitudeDeg: 73.8 }
+
 type EngineMode = 'boot' | 'showcase' | 'loading' | 'race' | 'replay'
 
 export class Engine {
@@ -141,6 +144,8 @@ export class Engine {
       setLoading(0.5, 'Building environment')
       this.sky = new SkySystem(this.scene, this.renderer, 14, this.quality.envMapSize)
       this.sky.configureShadows(this.quality.shadowMapSize, this.quality.shadowDistance, this.quality.shadowsEnabled)
+      setLoading(0.55, 'Loading sky')
+      if (!(await this.sky.loadHdri(`${import.meta.env.BASE_URL}${SKY_HDRI.file}`, SKY_HDRI.sunLongitudeDeg))) log.warn('Sky panorama missing — procedural sky environment in use')
       this.weather = new WeatherSystem('clear', ['clear'], false, false)
       this.particles = new ParticleSystem(this.textures, this.quality.particleBudget)
       this.scene.add(this.particles.root)
@@ -898,7 +903,7 @@ export class Engine {
     const t = this.elapsed * 0.08
     this.showcaseCamera.position.set(Math.sin(t) * 1.2 + 7.2, 2.3 + Math.sin(t * 0.7) * 0.25, Math.cos(t * 0.9) * 1.2 + 7.2)
     this.showcaseCamera.lookAt(this.showcase.cameraTarget)
-    this.scene.environmentIntensity = 0.7
+    this.scene.environmentIntensity = 0.7 * this.sky.envBoost
     this.post.setEnvironment(0.6, 0, 0, 'cool')
     this.post.setSpeed(0, false)
     this.particles.update(dt)
