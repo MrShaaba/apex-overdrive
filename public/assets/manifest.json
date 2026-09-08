@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-07T20:59:24.769Z",
+  "generatedAt": "2026-09-08T16:25:09.837Z",
   "assets": [
     {
       "id": "model.cars.mcl35m",
@@ -13,6 +13,12 @@
       "type": "model",
       "file": "models/cars/mp45.glb",
       "bytes": 18821544
+    },
+    {
+      "id": "model.cars.sf23",
+      "type": "model",
+      "file": "models/cars/sf23.glb",
+      "bytes": 10431984
     },
     {
       "id": "model.cars.w13",

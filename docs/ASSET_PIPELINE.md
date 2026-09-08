@@ -44,6 +44,10 @@ Integration points:
   primitives per material, drops `KHR_materials_transmission`, encodes textures to KTX2 with the
   `basisu` CLI (UASTC colour 2048², UASTC normals 1024², ETC1S roughness/metal 1024², mipmapped)
   and Draco-compresses the geometry. It prints wheelbase/track/radius for the catalog entry.
+  Models whose wheels are baked into the body (the SF-23) use `wheelDetect: 'contact'`: the
+  four wheels are located from the ground-contact patches (axle from the tyre top, width from
+  the tread-edge rings) and carved out of the body by a per-wheel cylinder test; `decimate`
+  runs meshoptimizer's simplifier afterwards (713k → 285k triangles for the SF-23).
   A catalog car opts in with `model: CarModelRef` (`VehicleSpec.ts`): `vehicles/CarModelLoader.ts`
   preloads the file with `GLTFLoader` + `DRACOLoader` + `KTX2Loader` (decoders under
   `public/libs/`) and `buildCarVisual()` clones it into a `CarVisual`; a missing file means the

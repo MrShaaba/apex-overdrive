@@ -395,6 +395,38 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
     defaultPaint: '#f2f2f2',
     defaultAccent: '#e30613',
   },
+  {
+    id: 'ferrari-sf23',
+    name: 'SF-23',
+    brand: 'Scuderia Ferrari',
+    vehicleClass: 'formula',
+    tagline: 'Rosso corsa, at eleven tenths.',
+    description:
+      'A licensed 3D model of the 2023 Ferrari, carved out of a single sculpt so its wheels steer and spin: halo, engine-cover fin and the full livery. Late-braking, high-downforce and built to hunt the Silver Arrow.',
+    price: 620000,
+    unlockLevel: 16,
+    tier: 5,
+    model: {
+      file: 'assets/models/cars/sf23.glb',
+      cockpitEye: [0, 0.84, 0.5],
+      tcam: [0, 1.25, -0.2],
+      exhausts: [[0, 0.55, -2.4]],
+      credit: '"Scuderia Ferrari F1 SF23 2023" by Redgrund on Sketchfab, CC-BY 4.0',
+    },
+    body: { shape: 'formula', length: 5.69, width: 2.01, height: 1.12, wheelbase: 3.61, trackWidth: 1.62, wheelRadius: 0.37, wheelWidth: 0.3, groundClearance: 0.05, rearOverhang: 0.79 },
+    mass: 798,
+    comHeight: 0.28,
+    engine: { type: 'hybrid', maxTorque: 690, peakRpm: 10600, redline: 12000, idleRpm: 2600, cylinders: 6, turbo: true, supercharged: false, turboGain: 0.45, turboSpool: 4.4, soundProfile: 'v10' },
+    gearbox: { ratios: [3.1, 2.4, 1.95, 1.62, 1.38, 1.19, 1.03, 0.9], finalDrive: 3.45, reverseRatio: 3.2, shiftTime: 0.04, drivetrain: 'RWD', rearBias: 1 },
+    suspension: { stiffness: 106000, dampingCompression: 7300, dampingRebound: 9300, restLength: 0.16, travel: 0.08, antiRoll: 28500 },
+    tires: { compound: 'slick', gripFront: 1.52, gripRear: 1.53, peakSlipAngle: 0.09, peakSlipRatio: 0.09, falloff: 0.72, rollingResistance: 0.01 },
+    brakes: { maxTorque: 6000, frontBias: 0.56, handbrakeTorque: 4000 },
+    aero: { dragCoefficient: 0.45, frontalArea: 1.5, downforceFront: 1.6, downforceRear: 2.45 },
+    steering: { maxAngle: 26, speedSensitivity: 0.85, responseRate: 16 },
+    performance: { topSpeed: 335, fuelCapacity: 110, fuelConsumption: 1.2, nitroCapacity: 125, nitroPower: 0.31 },
+    defaultPaint: '#d40000',
+    defaultAccent: '#ffd600',
+  },
 ]
 
 /** Invented formula teams: AI formula fields draw liveries from this table

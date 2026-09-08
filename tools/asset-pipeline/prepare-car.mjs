@@ -21,6 +21,10 @@
  *  5. strips KHR_materials_transmission (three renders it with a costly
  *     extra scene pass) in favour of plain alpha blending, applies per-car
  *     material overrides (Sketchfab exports often mark tyres as metal);
+ *  5b. with `wheelDetect: 'contact'` (wheels baked into the body, e.g. the
+ *     SF-23) the four wheels are found from the ground-contact patches and
+ *     carved out of the body by a per-wheel cylinder test; `decimate: ratio`
+ *     runs meshoptimizer's simplifier on everything afterwards;
  *  6. shrinks textures (colour 2048, normals/other 1024 by default), encodes
  *     them to KTX2 with the basisu CLI (UASTC for colour + normals, ETC1S for
  *     roughness/metal), mipmapped, and Draco-compresses the geometry.
@@ -37,8 +41,9 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS, KHRTextureBasisu } from '@gltf-transform/extensions'
-import { dedup, draco, joinPrimitives, listTextureSlots, prune, textureCompress, transformPrimitive, weld } from '@gltf-transform/functions'
+import { dedup, draco, joinPrimitives, listTextureSlots, prune, simplify, textureCompress, transformPrimitive, weld } from '@gltf-transform/functions'
 import draco3d from 'draco3dgltf'
+import { MeshoptSimplifier } from 'meshoptimizer'
 import sharp from 'sharp'
 
 const CARS = {
@@ -76,6 +81,18 @@ const CARS = {
       { match: /^mcl35m_png$|^mcl35m_h/, metallic: 0.15, roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.15 },
     ],
     report: [/st_wheel/, /mcl35m_h/],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  sf23: {
+    source: 'assets-src/models/cars/scuderia_ferrari_f1_sf23_2023/scene.gltf',
+    output: 'public/assets/models/cars/sf23.glb',
+    credit: 'Scuderia Ferrari F1 SF23 2023 by Redgrund (sketchfab.com/redgrund), CC-BY 4.0',
+    scale: 1.18, // 3.05 m wheelbase as exported; the real car is 3.6 m
+    yawDeg: 0,
+    rules: [], // one material, seven overlapping meshes: nothing to match on
+    wheelDetect: 'contact', // wheels are baked into the body — find them from the ground-contact patches
+    decimate: 0.4, // 713k tris → ~285k
+    report: [],
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
   mp45: {
@@ -156,19 +173,6 @@ for (const p of prims) if (!CLASSES.includes(p.cls)) throw new Error(`bad class 
 const R0 = mul(yawM((cfg.yawDeg * Math.PI) / 180), scaleM(cfg.scale))
 for (const p of prims) transformPrimitive(p.prim, mul(R0, p.world))
 
-// Shift so the tyres touch y = 0 and the wheelbase midpoint is the origin.
-const tyreBox = emptyBox()
-for (const p of prims) if (p.cls === 'tyre') { const b = primBounds(p.prim); growBox(tyreBox, b.lo); growBox(tyreBox, b.hi) }
-if (!Number.isFinite(tyreBox.lo[0])) throw new Error('no primitives classified as tyre — check the rules')
-const centre = boxCentre(tyreBox)
-const shift = translate(-centre[0], -tyreBox.lo[1], -centre[2])
-for (const p of prims) transformPrimitive(p.prim, shift)
-
-// Report boxes (final frame) for named parts, before meshes are rebuilt.
-const report = []
-for (const p of prims) if (cfg.report.some((re) => re.test(p.pathStr) || re.test(p.matName))) { const b = primBounds(p.prim); report.push(`${(p.pathStr.split('/').slice(-2).join('/') + ' [' + p.matName + ']').padEnd(52)} (${fmt(b.lo)}) .. (${fmt(b.hi)})`) }
-
-// --- wheel corners ---------------------------------------------------------------
 /** Copy the triangles listed in `tris` into a fresh primitive with compact, unshared accessors. */
 function subsetPrimitive(prim, tris, indices) {
   const remap = new Map(), order = [], newIdx = []
@@ -202,29 +206,141 @@ function splitCorners(prim) {
   }
   return buckets.map((b) => (b.length ? subsetPrimitive(prim, b, idx) : null))
 }
-const cornerParts = [[], [], [], []] // { prim, cls }
-for (const p of prims) {
-  if (p.cls !== 'tyre' && p.cls !== 'spin' && p.cls !== 'steer') continue
-  splitCorners(p.prim).forEach((half, i) => { if (half) cornerParts[i].push({ prim: half, cls: p.cls }) })
-  p.prim.dispose()
+
+/**
+ * Wheels baked into the body (no tyre material or node): find them from the
+ * ground-contact patches. Each corner's radius comes from the tyre's top,
+ * and its width from the x-slices whose ring of vertices at tread radius
+ * goes (almost) all the way round — floor and bodywork only cover the
+ * bottom of that ring, so they cannot stretch the tyre inboard.
+ */
+function detectWheelsByContact() {
+  const arrays = prims.map((p) => p.prim.getAttribute('POSITION').getArray())
+  let ground = Infinity
+  for (const a of arrays) for (let i = 1; i < a.length; i += 3) ground = Math.min(ground, a[i])
+  const low = []
+  for (const a of arrays) for (let i = 0; i < a.length; i += 3) if (a[i + 1] < ground + 0.012) low.push([a[i], a[i + 1], a[i + 2]])
+  const zm = low.reduce((s, v) => s + v[2], 0) / low.length
+  const clusters = [[], [], [], []]
+  for (const v of low) clusters[(v[2] > zm ? 0 : 2) + (v[0] < 0 ? 0 : 1)].push(v)
+  const wheels = clusters.map((c, i) => {
+    if (!c.length) throw new Error(`no ground contact found for corner ${i}`)
+    const cx0 = c.reduce((s, v) => s + v[0], 0) / c.length
+    const cz = c.reduce((s, v) => s + v[2], 0) / c.length
+    let top = ground
+    for (const a of arrays) for (let k = 0; k < a.length; k += 3) if (Math.abs(a[k] - cx0) < 0.12 && Math.abs(a[k + 2] - cz) < 0.08) top = Math.max(top, a[k + 1])
+    const radius = (top - ground) / 2
+    const yc = ground + radius
+    const SLICE = 0.01, BINS = 24
+    const slices = new Map()
+    for (const a of arrays) for (let k = 0; k < a.length; k += 3) {
+      const dx = a[k] - cx0
+      if (Math.abs(dx) > 0.6) continue
+      const dy = a[k + 1] - yc, dz = a[k + 2] - cz
+      const rad = Math.hypot(dy, dz)
+      if (rad < radius * 0.85 || rad > radius * 1.03) continue
+      const s = Math.round(dx / SLICE)
+      const bin = Math.floor(((Math.atan2(dz, dy) + Math.PI) / (2 * Math.PI)) * BINS) % BINS
+      if (!slices.has(s)) slices.set(s, new Set())
+      slices.get(s).add(bin)
+    }
+    // Full rings sit at the tread edges (the tread itself is long strips with
+    // no interior vertices): the tyre spans from the outermost ring to the
+    // innermost ring within a plausible tyre width of it.
+    const good = [...slices.entries()].filter(([, bins]) => bins.size >= BINS * 0.75).map(([s]) => s)
+    if (!good.length) throw new Error(`corner ${i}: no full tread ring found`)
+    const sign = cx0 < 0 ? -1 : 1
+    const sOut = good.reduce((a, b) => (b * sign > a * sign ? b : a))
+    const sIn = good.filter((s) => (sOut - s) * sign <= 0.5 / SLICE).reduce((a, b) => (b * sign < a * sign ? b : a))
+    const xOut = cx0 + sOut * SLICE, xIn = cx0 + sIn * SLICE
+    console.log(`  corner ${i}: rings at ${good.sort((a, b) => a - b).map((s) => (cx0 + s * SLICE).toFixed(2)).join(' ')} → tyre x ${Math.min(xOut, xIn).toFixed(3)}..${Math.max(xOut, xIn).toFixed(3)}`)
+    return { centre: [(xOut + xIn) / 2, yc, cz], radius, width: Math.abs(xOut - xIn) + SLICE }
+  })
+  return { ground, wheels }
 }
-const wheelInfo = cornerParts.map((parts, i) => {
-  const box = emptyBox()
-  for (const part of parts) if (part.cls === 'tyre') { const b = primBounds(part.prim); growBox(box, b.lo); growBox(box, b.hi) }
-  if (!Number.isFinite(box.lo[0])) throw new Error(`corner ${i} has no tyre triangles`)
-  // The axle centre and radius come from the y/z extent; the x extent (width
-  // and lateral centre) only from vertices out near the tread, so an axle
-  // rod or driveshaft baked into the same mesh cannot drag the wheel inboard.
-  const [, yc, zc] = boxCentre(box)
-  const radius = (box.hi[1] - box.lo[1]) / 2
-  const outer = emptyBox()
-  for (const part of parts) {
-    if (part.cls !== 'tyre') continue
-    const pos = part.prim.getAttribute('POSITION').getArray()
-    for (let k = 0; k < pos.length; k += 3) if (Math.hypot(pos[k + 1] - yc, pos[k + 2] - zc) > radius * 0.6) growBox(outer, [pos[k], pos[k + 1], pos[k + 2]])
+
+/** Move every triangle inside a wheel's cylinder (minus the inboard hub region where suspension arms enter) into that corner. */
+function captureWheels(wheels) {
+  const EPS = 0.02
+  for (const p of prims) {
+    const pos = p.prim.getAttribute('POSITION').getArray()
+    const idx = p.prim.getIndices()?.getArray() ?? null
+    const triCount = idx ? idx.length / 3 : pos.length / 9
+    const buckets = [[], [], [], []], rest = []
+    const inside = (v, w) => {
+      const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2]
+      const dx = x - w.centre[0]
+      if (Math.abs(dx) > w.width / 2 + EPS) return false
+      const rad = Math.hypot(y - w.centre[1], z - w.centre[2])
+      if (rad > w.radius + EPS) return false
+      const inboard = w.centre[0] < 0 ? dx > w.width / 4 : dx < -w.width / 4
+      return !(rad < w.radius * 0.35 && inboard)
+    }
+    for (let t = 0; t < triCount; t++) {
+      let hit = -1
+      for (let i = 0; i < 4 && hit < 0; i++) {
+        let all = true
+        for (let k = 0; k < 3 && all; k++) all = inside(idx ? idx[t * 3 + k] : t * 3 + k, wheels[i])
+        if (all) hit = i
+      }
+      ;(hit >= 0 ? buckets[hit] : rest).push(t)
+    }
+    if (buckets.every((b) => !b.length)) continue
+    buckets.forEach((b, i) => { if (b.length) cornerParts[i].push({ prim: subsetPrimitive(p.prim, b, idx), cls: 'tyre' }) })
+    const remainder = subsetPrimitive(p.prim, rest, idx)
+    p.prim.dispose()
+    p.prim = remainder
   }
-  return { centre: [(outer.lo[0] + outer.hi[0]) / 2, yc, zc], radius, width: outer.hi[0] - outer.lo[0] }
-})
+}
+
+const cornerParts = [[], [], [], []] // { prim, cls }
+let wheelInfo
+if (cfg.wheelDetect === 'contact') {
+  const { ground, wheels } = detectWheelsByContact()
+  captureWheels(wheels)
+  const xMid = wheels.reduce((s, w) => s + w.centre[0], 0) / 4
+  const zMid = wheels.reduce((s, w) => s + w.centre[2], 0) / 4
+  const shift = translate(-xMid, -ground, -zMid)
+  for (const p of prims) transformPrimitive(p.prim, shift)
+  for (const parts of cornerParts) for (const part of parts) transformPrimitive(part.prim, shift)
+  wheelInfo = wheels.map((w) => ({ centre: [w.centre[0] - xMid, w.centre[1] - ground, w.centre[2] - zMid], radius: w.radius, width: w.width }))
+  console.log('captured triangles per corner:', cornerParts.map((parts) => parts.reduce((s, part) => s + (part.prim.getIndices()?.getCount() ?? 0) / 3, 0)).join(' / '))
+  console.log('contact-detected wheels:', wheelInfo.map((w) => `(${w.centre.map((v) => v.toFixed(3)).join(', ')}) r ${w.radius.toFixed(3)} w ${w.width.toFixed(3)}`).join(' '))
+} else {
+  // Shift so the tyres touch y = 0 and the wheelbase midpoint is the origin.
+  const tyreBox = emptyBox()
+  for (const p of prims) if (p.cls === 'tyre') { const b = primBounds(p.prim); growBox(tyreBox, b.lo); growBox(tyreBox, b.hi) }
+  if (!Number.isFinite(tyreBox.lo[0])) throw new Error('no primitives classified as tyre — check the rules (or set wheelDetect: "contact")')
+  const centre = boxCentre(tyreBox)
+  const shift = translate(-centre[0], -tyreBox.lo[1], -centre[2])
+  for (const p of prims) transformPrimitive(p.prim, shift)
+  for (const p of prims) {
+    if (p.cls !== 'tyre' && p.cls !== 'spin' && p.cls !== 'steer') continue
+    splitCorners(p.prim).forEach((half, i) => { if (half) cornerParts[i].push({ prim: half, cls: p.cls }) })
+    p.prim.dispose()
+  }
+  wheelInfo = cornerParts.map((parts, i) => {
+    const box = emptyBox()
+    for (const part of parts) if (part.cls === 'tyre') { const b = primBounds(part.prim); growBox(box, b.lo); growBox(box, b.hi) }
+    if (!Number.isFinite(box.lo[0])) throw new Error(`corner ${i} has no tyre triangles`)
+    // The axle centre and radius come from the y/z extent; the x extent (width
+    // and lateral centre) only from vertices out near the tread, so an axle
+    // rod or driveshaft baked into the same mesh cannot drag the wheel inboard.
+    const [, yc, zc] = boxCentre(box)
+    const radius = (box.hi[1] - box.lo[1]) / 2
+    const outer = emptyBox()
+    for (const part of parts) {
+      if (part.cls !== 'tyre') continue
+      const pos = part.prim.getAttribute('POSITION').getArray()
+      for (let k = 0; k < pos.length; k += 3) if (Math.hypot(pos[k + 1] - yc, pos[k + 2] - zc) > radius * 0.6) growBox(outer, [pos[k], pos[k + 1], pos[k + 2]])
+    }
+    return { centre: [(outer.lo[0] + outer.hi[0]) / 2, yc, zc], radius, width: outer.hi[0] - outer.lo[0] }
+  })
+}
+
+// Report boxes (final frame) for named parts, before meshes are rebuilt.
+const report = []
+for (const p of prims) if (cfg.report.some((re) => re.test(p.pathStr) || re.test(p.matName))) { const b = primBounds(p.prim); report.push(`${(p.pathStr.split('/').slice(-2).join('/') + ' [' + p.matName + ']').padEnd(52)} (${fmt(b.lo)}) .. (${fmt(b.hi)})`) }
 
 // --- build the target hierarchy ------------------------------------------------
 for (const child of scene.listChildren()) scene.removeChild(child) // old roots are pruned later
@@ -324,6 +440,13 @@ if (!skipTextures) {
 }
 
 // --- geometry compression & write ----------------------------------------------
+if (cfg.decimate) {
+  await MeshoptSimplifier.ready
+  await doc.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: cfg.decimate, error: 0.001 }))
+  tris = 0
+  for (const mesh of root.listMeshes()) for (const p of mesh.listPrimitives()) tris += (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3
+  console.log(`decimated to ${Math.round(tris / 1000)}k tris (ratio ${cfg.decimate})`)
+}
 await doc.transform(dedup(), prune(), weld(), draco({ method: 'edgebreaker', quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 }))
 fs.mkdirSync(path.dirname(cfg.output), { recursive: true })
 await io.write(cfg.output, doc)
