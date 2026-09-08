@@ -52,6 +52,8 @@ const log = Logger.scope('Engine')
 
 /** Optional real-sky panorama for image-based lighting (see tools/asset-pipeline/convert-hdri.mjs). */
 const SKY_HDRI = { file: 'assets/hdri/nqweba_dawn_2k.hdr', sunLongitudeDeg: 73.8 }
+/** Licensed cockpit steering wheel (see tools/asset-pipeline/prepare-car.mjs, prop `wheel`); procedural rim when missing. */
+const COCKPIT_WHEEL_MODEL = 'assets/models/cockpit/mclaren_wheel.glb'
 
 type EngineMode = 'boot' | 'showcase' | 'loading' | 'race' | 'replay'
 
@@ -158,6 +160,9 @@ export class Engine {
       this.scene.add(this.cameraRig.camera)
       this.cockpitWheel = new CockpitWheel()
       this.cameraRig.camera.add(this.cockpitWheel.root)
+      void modelLibrary.preload(COCKPIT_WHEEL_MODEL).then((ok) => {
+        if (ok) this.cockpitWheel?.setModel(modelLibrary.get(COCKPIT_WHEEL_MODEL))
+      })
       this.showcase = new Showcase(this.textures)
       for (let i = 0; i < 6; i++) {
         const l = new THREE.PointLight(0xffe6b0, 0, 40, 1.6)

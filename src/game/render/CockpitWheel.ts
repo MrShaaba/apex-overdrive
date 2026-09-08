@@ -1,10 +1,15 @@
 /**
- * Cockpit steering wheel — an original F1-inspired design shown only in the
- * cockpit camera. The whole assembly is parented to the camera so it stays
- * glued to the view (and inherits impact shake); a spinner group rotates with
- * the live steering angle, and a CanvasTexture centre display shows the gear,
- * speed, RPM shift lights and — when the systems provide them — ERS charge and
- * DRS state.
+ * Cockpit steering wheel, shown only in the cockpit camera. The whole
+ * assembly is parented to the camera so it stays glued to the view (and
+ * inherits impact shake); a spinner group rotates with the live steering
+ * angle, and a CanvasTexture centre display shows the gear, speed, RPM shift
+ * lights and — when the systems provide them — ERS charge and DRS state.
+ *
+ * The rim is the licensed McLaren wheel model when `setModel()` has been
+ * given it (Engine preloads public/assets/models/cockpit/mclaren_wheel.glb,
+ * built by tools/asset-pipeline/prepare-car.mjs with its steering axis at
+ * the origin and +Z facing the driver); the original procedural rim is the
+ * fallback when the file is missing.
  */
 
 import * as THREE from 'three'
@@ -44,6 +49,11 @@ export class CockpitWheel {
   private repaintTimer = 0
   private lastPaintKey = ''
   private dash!: THREE.Group
+  /** Procedural rim parts, hidden when the licensed model is in. */
+  private readonly proceduralRim: THREE.Object3D[] = []
+  private readonly display: THREE.Mesh
+  private column: THREE.Mesh
+  private model: THREE.Group | null = null
 
   constructor() {
     this.root.name = 'cockpit-wheel'
@@ -64,51 +74,55 @@ export class CockpitWheel {
     const blue = this.mat(new THREE.MeshStandardMaterial({ color: 0x2f9dff, roughness: 0.35, metalness: 0.3, emissive: 0x2f9dff, emissiveIntensity: 0.25 }))
     const screen = this.mat(new THREE.MeshBasicMaterial({ map: this.tex, toneMapped: false }))
 
+    const rimPart = <T extends THREE.Object3D>(o: T): T => {
+      this.proceduralRim.push(o)
+      return o
+    }
     // Top arc of the rim (2 rad sweep centred on 12 o'clock).
-    const arc = new THREE.Mesh(this.geo(new THREE.TorusGeometry(0.165, 0.026, 12, 28, 2)), rubber)
+    const arc = rimPart(new THREE.Mesh(this.geo(new THREE.TorusGeometry(0.165, 0.026, 12, 28, 2)), rubber))
     arc.rotation.z = Math.PI / 2 - 1
     this.spinner.add(arc)
     // Vertical hand grips, tops leaning inward to meet the arc ends.
     for (const s of [-1, 1]) {
-      const grip = new THREE.Mesh(this.geo(new THREE.CapsuleGeometry(0.031, 0.155, 6, 12)), rubber)
+      const grip = rimPart(new THREE.Mesh(this.geo(new THREE.CapsuleGeometry(0.031, 0.155, 6, 12)), rubber))
       grip.position.set(s * 0.153, -0.02, 0)
       grip.rotation.z = -s * 0.17
       this.spinner.add(grip)
       // Orange thumb rest at the top of each grip.
-      const band = new THREE.Mesh(this.geo(new THREE.TorusGeometry(0.032, 0.006, 8, 16)), accent)
+      const band = rimPart(new THREE.Mesh(this.geo(new THREE.TorusGeometry(0.032, 0.006, 8, 16)), accent))
       band.position.set(s * 0.141, 0.05, 0)
       band.rotation.x = Math.PI / 2
       band.rotation.z = -s * 0.17
       this.spinner.add(band)
     }
     // Flat bottom bar.
-    const bottom = new THREE.Mesh(this.geo(new THREE.BoxGeometry(0.2, 0.042, 0.05)), rubber)
+    const bottom = rimPart(new THREE.Mesh(this.geo(new THREE.BoxGeometry(0.2, 0.042, 0.05)), rubber))
     bottom.position.set(0, -0.152, 0)
     this.spinner.add(bottom)
     // Centre body and display.
-    const body = new THREE.Mesh(this.geo(new THREE.BoxGeometry(0.2, 0.15, 0.048)), carbon)
+    const body = rimPart(new THREE.Mesh(this.geo(new THREE.BoxGeometry(0.2, 0.15, 0.048)), carbon))
     body.position.set(0, 0.005, 0)
     this.spinner.add(body)
-    const display = new THREE.Mesh(this.geo(new THREE.PlaneGeometry(0.172, 0.113)), screen)
+    const display = (this.display = new THREE.Mesh(this.geo(new THREE.PlaneGeometry(0.172, 0.113)), screen))
     display.position.set(0, 0.012, 0.0255)
     this.spinner.add(display)
     // Rotary knobs and buttons on the lower face.
     for (const [x, m] of [[-0.072, accent], [0.072, blue]] as const) {
-      const knob = new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 14)), m)
+      const knob = rimPart(new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 14)), m))
       knob.position.set(x, -0.062, 0.028)
       knob.rotation.x = Math.PI / 2
       this.spinner.add(knob)
     }
     // Shift paddles behind the wheel.
     for (const s of [-1, 1]) {
-      const paddle = new THREE.Mesh(this.geo(new THREE.BoxGeometry(0.042, 0.09, 0.006)), carbon)
+      const paddle = rimPart(new THREE.Mesh(this.geo(new THREE.BoxGeometry(0.042, 0.09, 0.006)), carbon))
       paddle.position.set(s * 0.108, -0.015, -0.04)
       paddle.rotation.y = -s * 0.3
       this.spinner.add(paddle)
     }
     this.root.add(this.spinner)
     // Steering column (does not rotate with the rim).
-    const column = new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.023, 0.03, 0.2, 12)), carbon)
+    const column = (this.column = new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.023, 0.03, 0.2, 12)), carbon))
     column.rotation.x = Math.PI / 2
     column.position.set(0, -0.02, -0.12)
     this.root.add(column)
@@ -166,6 +180,42 @@ export class CockpitWheel {
 
   setVisible(visible: boolean): void {
     this.root.visible = visible
+  }
+
+  /**
+   * Swap the procedural rim for a licensed wheel model (steering axis at the
+   * origin, +Z toward the driver, metres). The canvas display moves onto the
+   * model's screen so the gear/speed/ERS readout keeps working; the model's
+   * own quick-release hub replaces the procedural column.
+   */
+  setModel(template: THREE.Group | null): void {
+    if (this.model) {
+      this.spinner.remove(this.model)
+      this.model = null
+    }
+    const on = template !== null
+    for (const o of this.proceduralRim) o.visible = !on
+    this.column.visible = !on
+    if (template) {
+      const model = template.clone(true)
+      model.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.castShadow = false
+          o.receiveShadow = false
+        }
+      })
+      this.model = model
+      this.spinner.add(model)
+      // The McLaren wheel's screen sits at the top centre, 0.10 × 0.06 m,
+      // just behind a glass cover; park the readout a hair in front of it.
+      this.display.geometry.dispose()
+      this.display.geometry = this.geo(new THREE.PlaneGeometry(0.098, 0.064))
+      this.display.position.set(0, 0.057, 0.005)
+    } else {
+      this.display.geometry.dispose()
+      this.display.geometry = this.geo(new THREE.PlaneGeometry(0.172, 0.113))
+      this.display.position.set(0, 0.012, 0.0255)
+    }
   }
 
   /** Road cars show the wide dashboard plate; open formula cockpits hide it

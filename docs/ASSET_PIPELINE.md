@@ -48,6 +48,10 @@ Integration points:
   four wheels are located from the ground-contact patches (axle from the tyre top, width from
   the tread-edge rings) and carved out of the body by a per-wheel cylinder test; `decimate`
   runs meshoptimizer's simplifier afterwards (713k → 285k triangles for the SF-23).
+* **Cockpit props** — a config with `kind: 'prop'` (the McLaren steering wheel) skips the wheel
+  rig: the model is scaled, its `pivot` moved to the origin and everything joined under a `prop`
+  node. `render/CockpitWheel.ts` clones it into the spinner when Engine has preloaded it and
+  keeps the procedural rim as the fallback.
   A catalog car opts in with `model: CarModelRef` (`VehicleSpec.ts`): `vehicles/CarModelLoader.ts`
   preloads the file with `GLTFLoader` + `DRACOLoader` + `KTX2Loader` (decoders under
   `public/libs/`) and `buildCarVisual()` clones it into a `CarVisual`; a missing file means the

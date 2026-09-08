@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-08T16:25:09.837Z",
+  "generatedAt": "2026-09-08T16:32:30.151Z",
   "assets": [
     {
       "id": "model.cars.mcl35m",
@@ -24,7 +24,13 @@
       "id": "model.cars.w13",
       "type": "model",
       "file": "models/cars/w13.glb",
-      "bytes": 9349624
+      "bytes": 9352788
+    },
+    {
+      "id": "model.cockpit.mclaren_wheel",
+      "type": "model",
+      "file": "models/cockpit/mclaren_wheel.glb",
+      "bytes": 700980
     },
     {
       "id": "hdri.nqweba_dawn_2k",

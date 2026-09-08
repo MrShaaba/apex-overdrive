@@ -57,7 +57,7 @@ const CARS = {
       { cls: 'tyre', path: /(Front|Rear)Tyre/ },
       { cls: 'steer', path: /WheelHubInner/ }, // brake drums: steer, no spin
       { cls: 'spin', path: /FronyWheelHub|RearWheelHub/ }, // rims + brake ducts, both sides in one mesh
-      { cls: 'cockpit', path: /Steering/ },
+      { cls: 'cockpit', path: /Steering|Cube\.02[89]/ }, // wheel, column and the two wheel-mount blocks
       { cls: 'brake', path: /GlassLight/ },
     ],
     report: [/Headrest/, /HaloWing/, /T-Cam/, /Exhaust/, /WindScreen/, /SteeringWheel\.013/, /Seat\./],
@@ -95,6 +95,20 @@ const CARS = {
     report: [],
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
+  // Cockpit prop: no wheels, centred on its steering axis (CockpitWheel spins it about z).
+  wheel: {
+    kind: 'prop',
+    source: 'assets-src/models/cockpit/mclaren_steering_wheel/scene.gltf',
+    output: 'public/assets/models/cockpit/mclaren_wheel.glb',
+    credit: 'McLaren Formula 1 Steering Wheel by dhimasdc9 (sketchfab.com/dhimasdc9), CC-BY 4.0',
+    scale: 0.07, // 4.15 m wide as exported; a real wheel is ~0.29 m
+    yawDeg: 0,
+    pivot: [0, -0.43, 0], // quick-release hub centre, source units
+    rules: [],
+    decimate: 0.25, // 332k tris → ~83k
+    report: [/screen_0/, /glass_0/, /connector_0/],
+    textures: { color: 1024, normal: 1024, other: 1024 },
+  },
   mp45: {
     source: 'assets-src/models/cars/mclaren_mp45__formula_1/scene.gltf',
     output: 'public/assets/models/cars/mp45.glb',
@@ -110,7 +124,7 @@ const CARS = {
   },
 }
 
-const [carId, ...flags] = process.argv.slice(2)
+const [carId, ...flags] = process.argv.slice(2) // car id or prop id
 const cfg = CARS[carId]
 if (!cfg) {
   console.error(`unknown car "${carId}". Known: ${Object.keys(CARS).join(', ')}`)
@@ -295,7 +309,13 @@ function captureWheels(wheels) {
 
 const cornerParts = [[], [], [], []] // { prim, cls }
 let wheelInfo
-if (cfg.wheelDetect === 'contact') {
+const isProp = cfg.kind === 'prop'
+if (isProp) {
+  // No wheels: just move the pivot to the origin.
+  const shift = translate(-cfg.pivot[0] * cfg.scale, -cfg.pivot[1] * cfg.scale, -cfg.pivot[2] * cfg.scale)
+  for (const p of prims) transformPrimitive(p.prim, shift)
+  wheelInfo = []
+} else if (cfg.wheelDetect === 'contact') {
   const { ground, wheels } = detectWheelsByContact()
   captureWheels(wheels)
   const xMid = wheels.reduce((s, w) => s + w.centre[0], 0) / 4
@@ -345,12 +365,12 @@ for (const p of prims) if (cfg.report.some((re) => re.test(p.pathStr) || re.test
 // --- build the target hierarchy ------------------------------------------------
 for (const child of scene.listChildren()) scene.removeChild(child) // old roots are pruned later
 const mkNode = (name, parent) => { const n = doc.createNode(name); parent.addChild(n); return n }
-const bodyNode = mkNode('body', scene)
+const bodyNode = mkNode(isProp ? 'prop' : 'body', scene)
 const cockpitNode = mkNode('cockpit_hidden', bodyNode)
 const brakeNode = mkNode('light_brake', bodyNode)
 const groups = new Map() // target node → primitives
 const addPrim = (target, prim) => { if (!groups.has(target)) groups.set(target, []); groups.get(target).push(prim) }
-for (let i = 0; i < 4; i++) {
+for (let i = 0; i < (isProp ? 0 : 4); i++) {
   const c = wheelInfo[i].centre
   const hub = mkNode(`wheel_${i}`, scene).setTranslation(c)
   const spin = mkNode(`wheel_${i}_spin`, hub)
@@ -370,8 +390,9 @@ for (const mesh of root.listMeshes()) mesh.dispose()
 // Join primitives per material inside each target node → one mesh per node.
 let drawCalls = 0, tris = 0
 for (const [target, list] of groups) {
+  // Join only what joinPrimitives accepts: same material, mode and vertex layout.
   const byMat = new Map()
-  for (const p of list) { const m = p.getMaterial(); if (!byMat.has(m)) byMat.set(m, []); byMat.get(m).push(p) }
+  for (const p of list) { const key = [p.getMaterial()?.getName(), p.getMode(), p.listSemantics().join(','), p.getIndices() ? 'i' : 'n'].join('|'); if (!byMat.has(key)) byMat.set(key, []); byMat.get(key).push(p) }
   const mesh = doc.createMesh(target.getName())
   for (const same of byMat.values()) {
     const joined = same.length > 1 ? joinPrimitives(same) : same[0]
@@ -454,8 +475,13 @@ await io.write(cfg.output, doc)
 // --- report ----------------------------------------------------------------------
 const bodyBox = emptyBox()
 for (const p of bodyNode.getMesh().listPrimitives()) { const b = primBounds(p); growBox(bodyBox, b.lo); growBox(bodyBox, b.hi) }
-const [fl, fr, rl, rr] = wheelInfo.map((w) => w.centre)
 console.log(`\n${cfg.output}: ${(fs.statSync(cfg.output).size / 1048576).toFixed(2)} MB, ${drawCalls} draw calls, ${Math.round(tris / 1000)}k tris, ${root.listTextures().length} textures, ${((Date.now() - t0) / 1000).toFixed(1)} s`)
+if (isProp) {
+  console.log(`prop bounds (${fmt(bodyBox.lo)}) .. (${fmt(bodyBox.hi)}) → size ${fmt(bodyBox.hi.map((v, i) => v - bodyBox.lo[i]))}`)
+  console.log('reported parts (final frame):\n  ' + report.join('\n  '))
+  process.exit(0)
+}
+const [fl, fr, rl, rr] = wheelInfo.map((w) => w.centre)
 console.log('wheel centres FL/FR/RL/RR:', [fl, fr, rl, rr].map((c) => `(${c.map((v) => v.toFixed(3)).join(', ')})`).join(' '))
 console.log(`wheelbase ${(fl[2] - rl[2]).toFixed(3)}  track front ${(fr[0] - fl[0]).toFixed(3)} rear ${(rr[0] - rl[0]).toFixed(3)}  radius ${wheelInfo.map((w) => w.radius.toFixed(3)).join('/')}  width ${wheelInfo.map((w) => w.width.toFixed(3)).join('/')}`)
 console.log(`body bounds (${fmt(bodyBox.lo)}) .. (${fmt(bodyBox.hi)}) → length ${(bodyBox.hi[2] - bodyBox.lo[2]).toFixed(2)} width ${(bodyBox.hi[0] - bodyBox.lo[0]).toFixed(2)} height ${bodyBox.hi[1].toFixed(2)}`)
