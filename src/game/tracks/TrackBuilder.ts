@@ -28,6 +28,8 @@ import { Logger } from '../core/Logger'
 
 const log = Logger.scope('Track')
 const GROUND_GROUPS = makeGroups(CollisionGroup.GROUND, CollisionGroup.ALL)
+/** Licensed scenery library (see tools/asset-pipeline/prepare-props.mjs); generated props when missing. */
+const PROP_LIBRARY = 'assets/models/props/city.glb'
 const WALL_GROUPS = makeGroups(CollisionGroup.PROP, CollisionGroup.ALL)
 
 export interface Checkpoint {
@@ -905,7 +907,8 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   }
 
   // Scenery + hazards (a circuit model brings its own scenery).
-  const props = useModel ? emptyProps() : buildProps(def, spline, halfWidth, terrainHeight, textures, physics, quality.propDensity, bounds, shortcutClearance)
+  const propLibrary = !useModel && (await modelLibrary.preload(PROP_LIBRARY)) ? modelLibrary.get(PROP_LIBRARY) : null
+  const props = useModel ? emptyProps() : buildProps(def, spline, halfWidth, terrainHeight, textures, physics, quality.propDensity, bounds, shortcutClearance, propLibrary)
   root.add(props.root)
   const hazards = new HazardSystem(physics, textures)
   for (const f of def.features) if (f.type === 'hazard') hazards.add(f, spline, halfWidth, terrainHeight)

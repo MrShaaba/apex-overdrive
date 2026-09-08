@@ -65,6 +65,14 @@ Integration points:
   surfaces, terrain, barriers and props but keeps the spline, grid, checkpoints, pit lane, DRS
   zones, gantry and minimap. `node tools/asset-pipeline/dump-gltf.mjs <scene.gltf>` prints a
   model's node/material/bounds table when writing a config.
+* **Scenery library** — `node tools/asset-pipeline/prepare-props.mjs city` groups a scene's objects by
+  footprint overlap into props, drops ground sheets, classifies them by size (building, shop,
+  railing, bollard, post, billboard), centres each on its footprint with its base at y = 0 and
+  writes `public/assets/models/props/city.glb` with one `<kind>_<n>` node per prop (footprint
+  in the node extras). `TrackProps.buildProps()` takes the loaded library: on city circuits the
+  generated box buildings are replaced by scaled library buildings (same placement and colliders),
+  and every procedural circuit gets shops beside the road, railings along the start straight and
+  bollards on the outside of corners. Trees, rocks and theme props stay procedural.
 * **Cockpit props** — a config with `kind: 'prop'` (the McLaren steering wheel) skips the wheel
   rig: the model is scaled, its `pivot` moved to the origin and everything joined under a `prop`
   node. `render/CockpitWheel.ts` clones it into the spinner when Engine has preloaded it and

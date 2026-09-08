@@ -37,6 +37,31 @@ interface Chunk {
 const CHUNK = 120
 const PROP_GROUPS = makeGroups(CollisionGroup.PROP, CollisionGroup.ALL)
 
+/** A prop from the licensed scenery library (public/assets/models/props/*.glb, built by prepare-props.mjs). */
+interface LibraryProp {
+  meshes: THREE.Mesh[]
+  /** Footprint width / height / depth in metres, from the node extras. */
+  w: number
+  h: number
+  d: number
+}
+
+/** Group the library's `<kind>_<n>` nodes by kind. */
+export function indexPropLibrary(library: THREE.Group | null): Map<string, LibraryProp[]> {
+  const kinds = new Map<string, LibraryProp[]>()
+  if (!library) return kinds
+  for (const node of library.children) {
+    const kind = node.name.replace(/_\d+$/, '')
+    const meshes: THREE.Mesh[] = []
+    node.traverse((o) => { if (o instanceof THREE.Mesh) meshes.push(o) })
+    if (!meshes.length) continue
+    const ex = node.userData as { w?: number; h?: number; d?: number }
+    const prop = { meshes, w: ex.w ?? 2, h: ex.h ?? 2, d: ex.d ?? 2 }
+    ;(kinds.get(kind) ?? kinds.set(kind, []).get(kind)!).push(prop)
+  }
+  return kinds
+}
+
 export function buildProps(
   def: TrackDefinition,
   spline: TrackSpline,
@@ -47,6 +72,7 @@ export function buildProps(
   density: number,
   bounds: THREE.Box3,
   shortcutClearance: (x: number, z: number) => number,
+  library: THREE.Group | null = null,
 ): PropsResult {
   const root = new THREE.Group()
   root.name = 'props'
@@ -58,6 +84,35 @@ export function buildProps(
   const lampPositions: THREE.Vector3[] = []
   const nightMaterials: THREE.MeshStandardMaterial[] = []
   const animated: { mesh: THREE.InstancedMesh; phases: Float32Array; base: THREE.Matrix4[] }[] = []
+  const lib = indexPropLibrary(library)
+  const pick = (kind: string): LibraryProp | null => { const list = lib.get(kind); return list && list.length ? list[Math.floor(rng() * list.length)] : null }
+
+  /**
+   * Instance library props: one InstancedMesh per (prop, mesh) per chunk.
+   * Geometry and materials are the library's own (shared, not disposed here).
+   */
+  const placeLibrary = (placements: { prop: LibraryProp; matrix: THREE.Matrix4; position: THREE.Vector3 }[], cast = true) => {
+    const groups = new Map<LibraryProp, Map<Chunk, THREE.Matrix4[]>>()
+    for (const pl of placements) {
+      const byChunk = groups.get(pl.prop) ?? groups.set(pl.prop, new Map()).get(pl.prop)!
+      const c = chunkFor(pl.position)
+      ;(byChunk.get(c) ?? byChunk.set(c, []).get(c)!).push(pl.matrix)
+    }
+    for (const [prop, byChunk] of groups) {
+      for (const [chunk, mats] of byChunk) {
+        for (const mesh of prop.meshes) {
+          const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, mats.length)
+          mats.forEach((m, i) => inst.setMatrixAt(i, m))
+          inst.instanceMatrix.needsUpdate = true
+          inst.castShadow = cast
+          inst.receiveShadow = true
+          root.add(inst)
+          chunk.meshes.push(inst)
+          chunk.radius = Math.max(chunk.radius, 160)
+        }
+      }
+    }
+  }
 
   const chunkFor = (p: THREE.Vector3): Chunk => {
     const key = `${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`
@@ -187,8 +242,43 @@ export function buildProps(
   scatter('rock', rockGeo, rockMat, Math.round((def.theme === 'badlands' || def.theme === 'alpine' || def.theme === 'glacier' ? 260 : 60) * density), { minDist: halfWidth + 4, maxDist: 600, scale: [0.6, 3.2], collide: true, collideRadius: 1.2, yOffset: -0.3 })
   if (!env.snow) scatter('bush', bushGeo, bushMat, Math.round(220 * density), { minDist: halfWidth + 3, maxDist: 300, scale: [0.6, 1.5], yOffset: 0.2 })
 
-  // Buildings.
-  if (isCity) {
+  // Buildings: instances of the licensed city library when it is loaded,
+  // otherwise the generated textured boxes. Same placement rules either way.
+  const libBuildings = lib.get('building') ?? []
+  if (isCity && libBuildings.length) {
+    const buildingCount = Math.round(140 * env.buildingDensity * density)
+    const positions: THREE.Vector3[] = []
+    const placements: { prop: LibraryProp; matrix: THREE.Matrix4; position: THREE.Vector3 }[] = []
+    const size = bounds.getSize(new THREE.Vector3())
+    let attempts = 0
+    while (placements.length < buildingCount && attempts < buildingCount * 20) {
+      attempts++
+      const x = bounds.min.x - 150 + rng() * (size.x + 300)
+      const z = bounds.min.z - 150 + rng() * (size.z + 300)
+      const d = roadClearance(x, z)
+      const prop = libBuildings[Math.floor(rng() * libBuildings.length)]
+      // Scale the library block toward the footprint the generator would have used.
+      const w = 10 + rng() * 14
+      const dep = 10 + rng() * 14
+      const h = def.theme === 'neon' ? 14 + rng() * 30 : 9 + rng() * 22
+      if (d < halfWidth + 9 + Math.max(w, dep) * 0.5 || d > 420) continue
+      if (shortcutClearance(x, z) < halfWidth + 9 + Math.max(w, dep) * 0.5) continue
+      if (positions.some((p) => Math.abs(p.x - x) < w + 14 && Math.abs(p.z - z) < dep + 14)) continue
+      const y = terrainHeight(x, z) - 0.3
+      if (env.waterLevel !== null && y < env.waterLevel) continue
+      const yaw = Math.round(rng() * 4) * (Math.PI / 2)
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(w / prop.w, h / prop.h, dep / prop.d))
+      const position = new THREE.Vector3(x, y, z)
+      placements.push({ prop, matrix: m, position })
+      positions.push(position)
+      if (d < 60) {
+        const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(x, y + h / 2, z).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }))
+        const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cuboid(w / 2, h / 2, dep / 2).setCollisionGroups(PROP_GROUPS), body)
+        physics.registerCollider(col, { wall: true, surface: 'concrete' })
+      }
+    }
+    placeLibrary(placements)
+  } else if (isCity) {
     const styles: ('glass' | 'brick' | 'concrete' | 'neon' | 'warehouse')[] = def.theme === 'neon' ? ['neon', 'glass', 'neon', 'brick'] : def.theme === 'shipyard' ? ['warehouse', 'warehouse', 'concrete'] : ['glass', 'concrete', 'brick', 'glass']
     const buildingCount = Math.round(140 * env.buildingDensity * density)
     styles.forEach((style, si) => {
@@ -268,6 +358,63 @@ export function buildProps(
         })
       }
     })
+  }
+
+  // Trackside dressing from the city library: shops and kiosks beside the
+  // road (dense on city circuits, sparse elsewhere), guard railings along the
+  // start straight and bollards on the outside of corners.
+  if (lib.size) {
+    const shops: { prop: LibraryProp; matrix: THREE.Matrix4; position: THREE.Vector3 }[] = []
+    const spacing = (isCity ? 34 : 90) / Math.max(0.4, density)
+    for (let d = 40, k = 0; d < spline.length - 40; d += spacing, k++) {
+      const prop = pick('shop')
+      if (!prop) break
+      const s = spline.atDistance(d)
+      const side = k % 2 === 0 ? 1 : -1
+      const off = halfWidth + 6 + rng() * 3 + Math.max(prop.w, prop.d) * 0.5
+      const p = s.position.clone().addScaledVector(s.right, side * off)
+      const y = terrainHeight(p.x, p.z)
+      if (Math.abs(y - s.position.y) > 2.5) continue // hillside or bridge — no flat verge
+      if (env.waterLevel !== null && y < env.waterLevel + 0.5) continue
+      if (shortcutClearance(p.x, p.z) < halfWidth + 4) continue
+      p.y = y
+      const yaw = Math.atan2(s.tangent.x, s.tangent.z) + (side > 0 ? -Math.PI / 2 : Math.PI / 2)
+      const m = new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1))
+      shops.push({ prop, matrix: m, position: p })
+      const r = Math.max(prop.w, prop.d) * 0.5
+      const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y + prop.h / 2, p.z).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }))
+      const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cuboid(prop.w / 2, prop.h / 2, prop.d / 2).setCollisionGroups(PROP_GROUPS), body)
+      physics.registerCollider(col, { wall: true, surface: 'concrete' })
+      void r
+    }
+    placeLibrary(shops)
+    const railings: { prop: LibraryProp; matrix: THREE.Matrix4; position: THREE.Vector3 }[] = []
+    const rail = pick('railing')
+    if (rail) {
+      for (const side of [-1, 1]) {
+        for (let d = -140; d < 140; d += rail.d) {
+          const s = spline.atDistance(d)
+          const p = s.position.clone().addScaledVector(s.right, side * (halfWidth + 2.6))
+          p.y = s.position.y
+          const yaw = Math.atan2(s.tangent.x, s.tangent.z)
+          railings.push({ prop: rail, matrix: new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1)), position: p })
+        }
+      }
+      placeLibrary(railings, false)
+    }
+    const bollards: { prop: LibraryProp; matrix: THREE.Matrix4; position: THREE.Vector3 }[] = []
+    for (let i = 0; i < spline.count; i += 4) {
+      const s = spline.sampleAt(i)
+      if (Math.abs(s.curvature) < 0.006) continue
+      const prop = pick('bollard')
+      if (!prop) break
+      const side = s.curvature > 0 ? 1 : -1 // outside of the corner
+      const p = s.position.clone().addScaledVector(s.right, side * (halfWidth + 3.2))
+      p.y = terrainHeight(p.x, p.z)
+      if (Math.abs(p.y - s.position.y) > 1.5) continue
+      bollards.push({ prop, matrix: new THREE.Matrix4().compose(p, new THREE.Quaternion(), new THREE.Vector3(2.5, 2.5, 2.5)), position: p })
+    }
+    placeLibrary(bollards, false)
   }
 
   // Shipyard containers and cranes.

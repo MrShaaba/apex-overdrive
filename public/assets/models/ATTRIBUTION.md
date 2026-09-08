@@ -81,3 +81,7 @@ This work is based on "Drift Race Track Free" (https://sketchfab.com/3d-models/d
 - enforcer.glb — "The Terminus Enforcer" by TooManyDemons (https://sketchfab.com/toomanydemons), CC-BY 4.0.
 
 The NC / NC-SA licences permit this private, non-commercial use; they would not permit selling the game.
+
+## street_city_7 (scenery library, public/assets/models/props/city.glb)
+
+"street city (7) for games FREE" (https://sketchfab.com/3d-models/street-city-7-for-games-free) by dasy444 (https://sketchfab.com/dasy444), Sketchfab Standard licence (use in this private project only; the model files may not be redistributed).
