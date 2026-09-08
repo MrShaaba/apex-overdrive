@@ -66,7 +66,7 @@ export function defaultRaceConfig(partial: Partial<RaceConfig> = {}): RaceConfig
   return {
     mode: 'quick',
     trackId: 'island-causeway',
-    carId: 'v8-roadster',
+    carId: 'dodge-charger',
     laps: 3,
     aiCount: 9,
     aiMix: 'mixed',

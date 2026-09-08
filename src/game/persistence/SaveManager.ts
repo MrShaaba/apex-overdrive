@@ -8,6 +8,7 @@
 
 import { bus } from '../core/EventBus'
 import { TRACK_CATALOG } from '../tracks/TrackCatalog'
+import { resolveVehicleId } from '../vehicles/VehicleCatalog'
 import { Logger } from '../core/Logger'
 import { defaultSettings, type Settings } from '../core/Settings'
 import { LocalStorageAdapter, type StorageAdapter } from './StorageAdapter'
@@ -109,8 +110,8 @@ export function createDefaultProfile(): PlayerProfile {
     credits: 25000,
     xp: 0,
     level: 1,
-    ownedCars: ['v8-roadster'],
-    selectedCar: 'v8-roadster',
+    ownedCars: ['dodge-charger'],
+    selectedCar: 'dodge-charger',
     cars: {},
     unlockedTracks: ['island-causeway', 'lakeside-circuit', 'woodland-raceway', 'drift-park'],
     career: { chapter: 0, completedEvents: [], eventStars: {} },
@@ -184,6 +185,17 @@ export class SaveManager {
           audio: { ...defaults.audio, ...this.profile.settings?.audio },
           controls: { ...defaults.controls, ...this.profile.settings?.controls },
           gameplay: { ...defaults.gameplay, ...this.profile.settings?.gameplay },
+        }
+        // Retired procedural cars map onto their licensed replacements.
+        const prof = this.profile
+        prof.ownedCars = [...new Set(prof.ownedCars.map(resolveVehicleId))]
+        prof.selectedCar = resolveVehicleId(prof.selectedCar)
+        for (const [id, state] of Object.entries(prof.cars)) {
+          const next = resolveVehicleId(id)
+          if (next !== id) {
+            if (!prof.cars[next]) prof.cars[next] = state
+            delete prof.cars[id]
+          }
         }
         // Circuits added after this profile was created unlock straight away at their level.
         for (const t of TRACK_CATALOG) if (t.unlockLevel <= this.profile.level && !this.profile.unlockedTracks.includes(t.id)) this.profile.unlockedTracks.push(t.id)

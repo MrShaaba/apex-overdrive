@@ -48,6 +48,13 @@ Integration points:
   four wheels are located from the ground-contact patches (axle from the tyre top, width from
   the tread-edge rings) and carved out of the body by a per-wheel cylinder test; `decimate`
   runs meshoptimizer's simplifier afterwards (713k → 285k triangles for the SF-23).
+* **Road cars** — the same `prepare-car.mjs` with `wheelDetect: 'contact'`: each corner's contact patch
+  (the lowest 3 cm of its quadrant) gives the wheel centre and tread width, the densest full ring
+  centred on the axle gives the radius (or `wheelRadius: [front, rear]` pins the real value when a
+  low-poly tread loses to a high-poly rim), and a two-wheeler whose left/right "corners" land on
+  the same centred wheel keeps one rigged wheel per axle with an empty twin; `CarModelLoader`
+  keeps the model's lateral wheel offset so the single wheel renders on the centreline while the
+  physics still runs four contact patches.
 * **Circuits** — `node tools/asset-pipeline/prepare-track.mjs <track-id>` turns a raw circuit model into
   `public/assets/models/tracks/<id>.glb` with `road`, `terrain`, `wall` and `prop` nodes (walls
   become trimesh wall colliders, road/terrain ground colliders, props are scenery) and derives

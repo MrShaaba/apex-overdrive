@@ -95,6 +95,82 @@ const CARS = {
     report: [],
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
+  // --- road cars: wheels found from the ground-contact patches (see sf23) ---
+  countach: {
+    source: 'assets-src/models/roadcars/2021_lamborghini_countach_lpi_800-4/scene.gltf',
+    output: 'public/assets/models/cars/countach.glb',
+    credit: '2021 Lamborghini Countach LPI 800-4 by Lexyc16 (sketchfab.com/Lexyc16), CC-BY-NC 4.0',
+    scale: 0.495, // 9.8 m long as exported; the real car is 4.87 m
+    yawDeg: 180,
+    rules: [],
+    wheelDetect: 'contact',
+    decimate: 0.5,
+    report: [],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  revuelto: {
+    source: 'assets-src/models/roadcars/lamborghini_revuelto/scene.gltf',
+    output: 'public/assets/models/cars/revuelto.glb',
+    credit: 'Lamborghini Revuelto by Outlaw Games (sketchfab.com/Outlaw_Games), CC-BY-NC 4.0',
+    scale: 1,
+    yawDeg: 90, // exported with the length along +X
+    rules: [],
+    wheelDetect: 'contact',
+    wheelRadius: [0.35, 0.37], // real tyre radii (m): the low-poly tread ring loses the density contest to the rims
+    decimate: 0.5,
+    report: [],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  huracan: {
+    source: 'assets-src/models/roadcars/huracan_eagletm/scene.gltf',
+    output: 'public/assets/models/cars/huracan.glb',
+    credit: 'Huracan EAGLE by SDC PERFORMANCE (sketchfab.com/3Duae), CC-BY-NC 4.0',
+    scale: 0.865, // 5.26 m long as exported; the GT3 car is 4.55 m
+    yawDeg: 180,
+    rules: [],
+    wheelDetect: 'contact',
+    decimate: 0.4,
+    report: [],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  charger: {
+    source: 'assets-src/models/roadcars/dodge_charger_fast__furious_8/scene.gltf',
+    output: 'public/assets/models/cars/charger.glb',
+    credit: 'Dodge Charger Fast & Furious 8 by VTX (sketchfab.com/VTX_car), CC-BY-NC-SA 4.0',
+    scale: 1,
+    yawDeg: 180, // the dashboard sits at -Z
+    rules: [],
+    wheelDetect: 'contact',
+    wheelRadius: [0.37, 0.37], // real tyre radii (m): the low-poly tread ring loses the density contest to the rims
+    decimate: 0.6,
+    report: [],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  challenger: {
+    source: 'assets-src/models/roadcars/dodge_challenger_modified_truck/scene.gltf',
+    output: 'public/assets/models/cars/challenger.glb',
+    credit: 'dodge challenger modified truck by carmodifier (sketchfab.com/carmodifier), CC-BY-NC 4.0',
+    scale: 0.59, // 8.5 m long as exported; a Challenger is 5.0 m
+    yawDeg: 180, // the grille faces -Z as exported
+    rules: [],
+    wheelDetect: 'contact',
+    decimate: 0.06, // 4.2 M tris of bolts and engine parts
+    report: [],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  enforcer: {
+    source: 'assets-src/models/roadcars/the_terminus_enforcer/scene.gltf',
+    output: 'public/assets/models/cars/enforcer.glb',
+    credit: 'The Terminus Enforcer by TooManyDemons (sketchfab.com/toomanydemons), CC-BY 4.0',
+    scale: 0.01, // centimetres
+    yawDeg: 0,
+    rules: [],
+    wheelDetect: 'contact',
+    wheelRadius: [0.7, 0.7], // real tyre radii (m): the low-poly tread ring loses the density contest to the rims
+    decimate: 0.6,
+    report: [],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
   // Cockpit prop: no wheels, centred on its steering axis (CockpitWheel spins it about z).
   wheel: {
     kind: 'prop',
@@ -230,47 +306,74 @@ function splitCorners(prim) {
  */
 function detectWheelsByContact() {
   const arrays = prims.map((p) => p.prim.getAttribute('POSITION').getArray())
-  let ground = Infinity
-  for (const a of arrays) for (let i = 1; i < a.length; i += 3) ground = Math.min(ground, a[i])
-  const low = []
-  for (const a of arrays) for (let i = 0; i < a.length; i += 3) if (a[i + 1] < ground + 0.012) low.push([a[i], a[i + 1], a[i + 2]])
-  const zm = low.reduce((s, v) => s + v[2], 0) / low.length
+  // Overall footprint → quadrants (the lowest points of each quadrant are that
+  // corner's contact patch, so a model that sits a little nose-down still works).
+  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
+  for (const a of arrays) for (let i = 0; i < a.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], a[i + k]); hi[k] = Math.max(hi[k], a[i + k]) }
+  const cxAll = (lo[0] + hi[0]) / 2, czAll = (lo[2] + hi[2]) / 2
+  const quad = (x, z) => (z > czAll ? 0 : 2) + (x < cxAll ? 0 : 1)
+  const minY = [Infinity, Infinity, Infinity, Infinity]
+  for (const a of arrays) for (let i = 0; i < a.length; i += 3) { const q = quad(a[i], a[i + 2]); minY[q] = Math.min(minY[q], a[i + 1]) }
+  const CONTACT = 0.03
   const clusters = [[], [], [], []]
-  for (const v of low) clusters[(v[2] > zm ? 0 : 2) + (v[0] < 0 ? 0 : 1)].push(v)
+  for (const a of arrays) for (let i = 0; i < a.length; i += 3) { const q = quad(a[i], a[i + 2]); if (a[i + 1] < minY[q] + CONTACT) clusters[q].push([a[i], a[i + 1], a[i + 2]]) }
+  const BINS = 24, SLICE = 0.01
   const wheels = clusters.map((c, i) => {
     if (!c.length) throw new Error(`no ground contact found for corner ${i}`)
     const cx0 = c.reduce((s, v) => s + v[0], 0) / c.length
     const cz = c.reduce((s, v) => s + v[2], 0) / c.length
-    let top = ground
-    for (const a of arrays) for (let k = 0; k < a.length; k += 3) if (Math.abs(a[k] - cx0) < 0.12 && Math.abs(a[k + 2] - cz) < 0.08) top = Math.max(top, a[k + 1])
-    const radius = (top - ground) / 2
-    const yc = ground + radius
-    const SLICE = 0.01, BINS = 24
-    const slices = new Map()
-    for (const a of arrays) for (let k = 0; k < a.length; k += 3) {
-      const dx = a[k] - cx0
-      if (Math.abs(dx) > 0.6) continue
-      const dy = a[k + 1] - yc, dz = a[k + 2] - cz
-      const rad = Math.hypot(dy, dz)
-      if (rad < radius * 0.85 || rad > radius * 1.03) continue
-      const s = Math.round(dx / SLICE)
-      const bin = Math.floor(((Math.atan2(dz, dy) + Math.PI) / (2 * Math.PI)) * BINS) % BINS
-      if (!slices.has(s)) slices.set(s, new Set())
-      slices.get(s).add(bin)
+    const ground = minY[i]
+    // Vertices near this corner (any height): the tyre lives within ~1.2 m of the patch.
+    const near = []
+    for (const a of arrays) for (let k = 0; k < a.length; k += 3) if (Math.abs(a[k] - cx0) < 0.6 && Math.abs(a[k + 2] - cz) < 1.2) near.push(a[k], a[k + 1], a[k + 2])
+    // Radius: the largest ring around the axle that goes (almost) all the way
+    // round. Wheel arches are open at the bottom, so they never qualify.
+    // Every full ring centred on the axle is a candidate (tread, rim lip,
+    // sometimes a wheel-well liner); the densest one is normally the tread.
+    // Low-poly tyres next to high-poly rims lose that contest, so a config
+    // may pin the real tyre radius instead (`wheelRadius: [front, rear]`).
+    let radius = cfg.wheelRadius ? cfg.wheelRadius[i < 2 ? 0 : 1] : 0, bestScore = 0
+    const candidates = []
+    if (!radius) {
+      for (let r = 1.0; r >= 0.15; r -= 0.005) {
+        const yc = ground + r
+        const bins = new Set()
+        let count = 0
+        for (let k = 0; k < near.length; k += 3) {
+          if (Math.abs(near[k] - cx0) > 0.35) continue
+          const dy = near[k + 1] - yc, dz = near[k + 2] - cz
+          const rad = Math.hypot(dy, dz)
+          if (Math.abs(rad - r) > r * 0.03) continue
+          bins.add(Math.floor(((Math.atan2(dz, dy) + Math.PI) / (2 * Math.PI)) * BINS) % BINS)
+          count++
+        }
+        if (bins.size >= BINS * 0.75) { candidates.push({ r, coverage: bins.size / BINS, count }); if (count > bestScore) { bestScore = count; radius = r } }
+      }
+      if (process.env.RING_DEBUG) console.log(`    corner ${i} rings:`, candidates.sort((a, b) => b.count - a.count).slice(0, 8).map((c) => `${c.r.toFixed(3)}:${c.count}@${Math.round(c.coverage * 100)}%`).join(' '))
     }
-    // Full rings sit at the tread edges (the tread itself is long strips with
-    // no interior vertices): the tyre spans from the outermost ring to the
-    // innermost ring within a plausible tyre width of it.
-    const good = [...slices.entries()].filter(([, bins]) => bins.size >= BINS * 0.75).map(([s]) => s)
-    if (!good.length) throw new Error(`corner ${i}: no full tread ring found`)
-    const sign = cx0 < 0 ? -1 : 1
-    const sOut = good.reduce((a, b) => (b * sign > a * sign ? b : a))
-    const sIn = good.filter((s) => (sOut - s) * sign <= 0.5 / SLICE).reduce((a, b) => (b * sign < a * sign ? b : a))
-    const xOut = cx0 + sOut * SLICE, xIn = cx0 + sIn * SLICE
-    console.log(`  corner ${i}: rings at ${good.sort((a, b) => a - b).map((s) => (cx0 + s * SLICE).toFixed(2)).join(' ')} → tyre x ${Math.min(xOut, xIn).toFixed(3)}..${Math.max(xOut, xIn).toFixed(3)}`)
-    return { centre: [(xOut + xIn) / 2, yc, cz], radius, width: Math.abs(xOut - xIn) + SLICE }
+    if (!radius) throw new Error(`corner ${i}: no full tread ring found around (${cx0.toFixed(2)}, ${cz.toFixed(2)})`)
+    const yc = ground + radius
+    // Width from the contact patch: the lowest 3 cm of the tyre is exactly the
+    // tread on the ground, which neither fenders, liners nor the floor reach.
+    const pxs = c.map((v) => v[0]).sort((a, b) => a - b)
+    const xIn0 = pxs[Math.floor(pxs.length * 0.02)], xOut0 = pxs[Math.ceil(pxs.length * 0.98) - 1]
+    const pad = (xOut0 - xIn0) * 0.04
+    const xIn = xIn0 - pad, xOut = xOut0 + pad
+    void SLICE
+    console.log(`  corner ${i}: contact (${cx0.toFixed(2)}, ${cz.toFixed(2)}) r ${radius.toFixed(3)} (${bestScore} tread verts) patch x ${xIn.toFixed(3)}..${xOut.toFixed(3)}`)
+    return { centre: [(xOut + xIn) / 2, yc, cz], radius, width: xOut - xIn, ground }
   })
-  return { ground, wheels }
+  // Two-wheelers: both "corners" of an axle land on the same centred wheel.
+  for (const [a, b] of [[0, 1], [2, 3]]) {
+    if (Math.abs(wheels[a].centre[0] - wheels[b].centre[0]) < 0.3) {
+      const w = wheels[a], v = wheels[b]
+      const xMin = Math.min(w.centre[0] - w.width / 2, v.centre[0] - v.width / 2), xMax = Math.max(w.centre[0] + w.width / 2, v.centre[0] + v.width / 2)
+      wheels[a] = { ...w, centre: [(xMin + xMax) / 2, w.centre[1], (w.centre[2] + v.centre[2]) / 2], width: xMax - xMin, radius: Math.max(w.radius, v.radius) }
+      wheels[b] = { ...wheels[a], empty: true }
+      console.log(`  corners ${a}/${b} share one centred wheel (two-wheeler): corner ${b} left empty`)
+    }
+  }
+  return { ground: Math.min(...wheels.map((w) => w.ground)), wheels }
 }
 
 /** Move every triangle inside a wheel's cylinder (minus the inboard hub region where suspension arms enter) into that corner. */
@@ -293,6 +396,7 @@ function captureWheels(wheels) {
     for (let t = 0; t < triCount; t++) {
       let hit = -1
       for (let i = 0; i < 4 && hit < 0; i++) {
+        if (wheels[i].empty) continue
         let all = true
         for (let k = 0; k < 3 && all; k++) all = inside(idx ? idx[t * 3 + k] : t * 3 + k, wheels[i])
         if (all) hit = i
@@ -301,7 +405,7 @@ function captureWheels(wheels) {
     }
     if (buckets.every((b) => !b.length)) continue
     buckets.forEach((b, i) => { if (b.length) cornerParts[i].push({ prim: subsetPrimitive(p.prim, b, idx), cls: 'tyre' }) })
-    const remainder = subsetPrimitive(p.prim, rest, idx)
+    const remainder = rest.length ? subsetPrimitive(p.prim, rest, idx) : null
     p.prim.dispose()
     p.prim = remainder
   }
@@ -318,12 +422,18 @@ if (isProp) {
 } else if (cfg.wheelDetect === 'contact') {
   const { ground, wheels } = detectWheelsByContact()
   captureWheels(wheels)
+  for (let i = prims.length - 1; i >= 0; i--) {
+    const pr = prims[i].prim
+    const bad = !pr || Array.from(pr.getAttribute('POSITION').getArray()).some((v) => !Number.isFinite(v))
+    if (bad) { pr?.dispose(); prims.splice(i, 1) } // fully captured meshes, or junk with NaN vertices
+  }
   const xMid = wheels.reduce((s, w) => s + w.centre[0], 0) / 4
   const zMid = wheels.reduce((s, w) => s + w.centre[2], 0) / 4
+  void ground
   const shift = translate(-xMid, -ground, -zMid)
   for (const p of prims) transformPrimitive(p.prim, shift)
   for (const parts of cornerParts) for (const part of parts) transformPrimitive(part.prim, shift)
-  wheelInfo = wheels.map((w) => ({ centre: [w.centre[0] - xMid, w.centre[1] - ground, w.centre[2] - zMid], radius: w.radius, width: w.width }))
+  wheelInfo = wheels.map((w) => ({ centre: [w.centre[0] - xMid, w.centre[1] - ground, w.centre[2] - zMid], radius: w.radius, width: w.width, empty: !!w.empty }))
   console.log('captured triangles per corner:', cornerParts.map((parts) => parts.reduce((s, part) => s + (part.prim.getIndices()?.getCount() ?? 0) / 3, 0)).join(' / '))
   console.log('contact-detected wheels:', wheelInfo.map((w) => `(${w.centre.map((v) => v.toFixed(3)).join(', ')}) r ${w.radius.toFixed(3)} w ${w.width.toFixed(3)}`).join(' '))
 } else {
@@ -468,13 +578,17 @@ if (cfg.decimate) {
   for (const mesh of root.listMeshes()) for (const p of mesh.listPrimitives()) tris += (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3
   console.log(`decimated to ${Math.round(tris / 1000)}k tris (ratio ${cfg.decimate})`)
 }
-await doc.transform(dedup(), prune(), weld(), draco({ method: 'edgebreaker', quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 }))
+await doc.transform(dedup(), prune({ keepLeaves: true }), weld(), draco({ method: 'edgebreaker', quantizePosition: 14, quantizeNormal: 10, quantizeTexcoord: 12 }))
 fs.mkdirSync(path.dirname(cfg.output), { recursive: true })
 await io.write(cfg.output, doc)
 
 // --- report ----------------------------------------------------------------------
 const bodyBox = emptyBox()
-for (const p of bodyNode.getMesh().listPrimitives()) { const b = primBounds(p); growBox(bodyBox, b.lo); growBox(bodyBox, b.hi) }
+for (const p of bodyNode.getMesh().listPrimitives()) {
+  const b = primBounds(p)
+  if (!Number.isFinite(b.lo[0]) || Number.isNaN(b.lo[0])) { console.log(`  body primitive ${p.getMaterial()?.getName()} has ${p.getAttribute('POSITION').getCount()} verts and non-finite bounds`); continue }
+  growBox(bodyBox, b.lo); growBox(bodyBox, b.hi)
+}
 console.log(`\n${cfg.output}: ${(fs.statSync(cfg.output).size / 1048576).toFixed(2)} MB, ${drawCalls} draw calls, ${Math.round(tris / 1000)}k tris, ${root.listTextures().length} textures, ${((Date.now() - t0) / 1000).toFixed(1)} s`)
 if (isProp) {
   console.log(`prop bounds (${fmt(bodyBox.lo)}) .. (${fmt(bodyBox.hi)}) → size ${fmt(bodyBox.hi.map((v, i) => v - bodyBox.lo[i]))}`)

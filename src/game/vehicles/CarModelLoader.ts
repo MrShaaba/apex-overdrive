@@ -155,7 +155,12 @@ export function buildModelCarVisual(spec: VehicleSpec, template: THREE.Group, hi
     const spin = find(`wheel_${i}_spin`)
     if (!node || !spin) throw new Error(`${ref.file}: missing wheel_${i} rig`)
     node.removeFromParent()
-    node.position.set(0, 0, 0) // the pipeline's wheel-centre translation; physics places the hub
+    // The pipeline stores the model's wheel centre as the node translation;
+    // physics places the hub at ±trackWidth/2, so keep only the difference
+    // (a few cm for a normal car, the whole half-track for a two-wheeler's
+    // single centred wheel).
+    const hubX = (i % 2 === 0 ? -1 : 1) * b.trackWidth * 0.5
+    node.position.set(node.position.x - hubX, 0, 0)
     const hub = new THREE.Group()
     hub.name = `hub_${i}`
     hub.add(node)

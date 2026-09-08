@@ -6,7 +6,7 @@
  * never drift from the simulation.
  */
 
-export type VehicleClass = 'gt' | 'supercar' | 'roadster' | 'drift' | 'rally' | 'ev' | 'vintage' | 'track' | 'prototype' | 'formula'
+export type VehicleClass = 'gt' | 'supercar' | 'roadster' | 'muscle' | 'drift' | 'rally' | 'ev' | 'vintage' | 'track' | 'prototype' | 'formula'
 export type Drivetrain = 'RWD' | 'AWD' | 'FWD'
 export type EngineType = 'ice' | 'ev' | 'hybrid'
 export type TireCompound = 'street' | 'sport' | 'semi-slick' | 'slick' | 'rally' | 'winter'

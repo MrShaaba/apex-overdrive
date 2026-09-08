@@ -70,3 +70,14 @@ This work is based on "McLaren Formula 1 Steering Wheel" (https://sketchfab.com/
 ## drift_race_track (circuit)
 
 This work is based on "Drift Race Track Free" (https://sketchfab.com/3d-models/drift-race-track-free) by Nicholas-3D (https://sketchfab.com/Nicholas01) licensed under CC-BY-ND-4.0 (http://creativecommons.org/licenses/by-nd/4.0/). Note: the ND licence permits use but not redistribution of modified versions; the compressed .glb here is for this private, unpublished game only.
+
+## Road cars (public/assets/models/cars/*.glb)
+
+- charger.glb — "Dodge Charger Fast & Furious 8" (https://sketchfab.com/3d-models/dodge-charger-fast-furious-8) by VTX (https://sketchfab.com/VTX_car), CC-BY-NC-SA 4.0.
+- challenger.glb — "dodge challenger modified truck" by carmodifier (https://sketchfab.com/carmodifier), CC-BY-NC 4.0.
+- huracan.glb — "Huracan EAGLE" by SDC PERFORMANCE (https://sketchfab.com/3Duae), CC-BY-NC 4.0.
+- countach.glb — "2021 Lamborghini Countach LPI 800-4" by Lexyc16 (https://sketchfab.com/Lexyc16), CC-BY-NC 4.0.
+- revuelto.glb — "Lamborghini Revuelto" by Outlaw Games (https://sketchfab.com/Outlaw_Games), CC-BY-NC 4.0.
+- enforcer.glb — "The Terminus Enforcer" by TooManyDemons (https://sketchfab.com/toomanydemons), CC-BY 4.0.
+
+The NC / NC-SA licences permit this private, non-commercial use; they would not permit selling the game.

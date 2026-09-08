@@ -185,7 +185,7 @@ export const gameStore = new Store<UIState>({
   replay: { active: false, playing: false, time: 0, duration: 0, speed: 1 },
   photo: { active: false, lastCapture: null },
   toasts: [],
-  showcaseCar: 'v8-roadster',
+  showcaseCar: 'dodge-charger',
   quality: { preset: 'auto', scale: 1 },
   audioUnlocked: false,
   gamepad: false,
