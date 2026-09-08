@@ -285,10 +285,17 @@ function buildRim(style: RimStyle, radius: number, width: number, color: string)
 }
 
 export function buildCarVisual(spec: VehicleSpec, custom: VehicleCustomization, textures: TextureFactory, highDetail = true): CarVisual {
-  // Licensed model when its file has been preloaded; procedural otherwise.
+  // Licensed model when its file has been preloaded; procedural otherwise
+  // (also if the file turns out not to follow the rig contract).
   if (spec.model) {
     const template = modelLibrary.get(spec.model.file)
-    if (template) return buildModelCarVisual(spec, template, highDetail)
+    if (template) {
+      try {
+        return buildModelCarVisual(spec, template, highDetail)
+      } catch (err) {
+        console.warn(`[Models] ${spec.model.file} could not be rigged — procedural mesh in use`, err)
+      }
+    }
   }
   const root = new THREE.Group()
   root.name = `car-${spec.id}`

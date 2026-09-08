@@ -149,11 +149,16 @@ export function buildModelCarVisual(spec: VehicleSpec, template: THREE.Group, hi
   const wheels: THREE.Group[] = []
   const wheelSpin: THREE.Object3D[] = []
   for (let i = 0; i < 4; i++) {
-    const hub = find(`wheel_${i}`)
+    // GLTFLoader turns a node into an Object3D, Mesh or Group depending on
+    // its primitives, so wrap whatever came back in a fresh hub group.
+    const node = find(`wheel_${i}`)
     const spin = find(`wheel_${i}_spin`)
-    if (!(hub instanceof THREE.Group) || !spin) throw new Error(`${ref.file}: missing wheel_${i} rig`)
-    hub.removeFromParent()
-    // Physics owns the hub transform from here on (Vehicle.update).
+    if (!node || !spin) throw new Error(`${ref.file}: missing wheel_${i} rig`)
+    node.removeFromParent()
+    node.position.set(0, 0, 0) // the pipeline's wheel-centre translation; physics places the hub
+    const hub = new THREE.Group()
+    hub.name = `hub_${i}`
+    hub.add(node)
     hub.position.set((i % 2 === 0 ? -1 : 1) * b.trackWidth * 0.5, b.wheelRadius + bodyOffsetY, (i < 2 ? 1 : -1) * b.wheelbase * 0.5)
     root.add(hub)
     wheels.push(hub)

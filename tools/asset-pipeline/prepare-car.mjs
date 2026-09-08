@@ -6,22 +6,28 @@
  *  1. re-frames the model in metres, +Z forward, ground at y = 0 and x/z = 0
  *     at the wheelbase midpoint (the frame VehicleController/CarModelLoader
  *     assume), baking every node transform into the vertices;
- *  2. rigs the wheels: each tyre becomes wheel_N/wheel_N_spin (N = FL, FR,
- *     RL, RR), meshes that span both sides of an axle (rims, brake drums)
- *     are split by triangle position into left/right halves and attached to
- *     the matching wheel — spinning parts under *_spin, steering-only parts
- *     under wheel_N;
- *  3. groups everything else under `body`, with `cockpit_hidden` (the
+ *  2. classifies every primitive with the car's `rules` (regex on the node
+ *     path or material name; first match wins) as tyre / spin / steer /
+ *     cockpit / brake / body;
+ *  3. rigs the wheels: tyre, spin and steer primitives are split into the
+ *     four corners by triangle position (x sign, z sign about the wheelbase
+ *     midpoint), so per-corner tyres, per-axle rim meshes and one-mesh
+ *     wheel sets all end up as wheel_N (FL, FR, RL, RR, physics order) with
+ *     a wheel_N_spin child holding the spinning parts; the tyre cluster of
+ *     each corner defines the wheel centre, radius and width;
+ *  4. groups everything else under `body`, with `cockpit_hidden` (the
  *     model's own steering wheel) and `light_brake` (emissive brake lamps)
  *     as named children, and joins primitives per material to cut draw calls;
- *  4. strips KHR_materials_transmission (three renders it with a costly
- *     extra scene pass) in favour of plain alpha blending;
- *  5. shrinks textures (colour 2048, normals/other 1024 by default), encodes
+ *  5. strips KHR_materials_transmission (three renders it with a costly
+ *     extra scene pass) in favour of plain alpha blending, applies per-car
+ *     material overrides (Sketchfab exports often mark tyres as metal);
+ *  6. shrinks textures (colour 2048, normals/other 1024 by default), encodes
  *     them to KTX2 with the basisu CLI (UASTC for colour + normals, ETC1S for
  *     roughness/metal), mipmapped, and Draco-compresses the geometry.
  *
- * It prints the measured wheelbase, track, wheel radius/width and the final
- * positions of named parts so the VehicleCatalog entry can be filled in.
+ * It prints the measured wheelbase, track, wheel radius/width, overhangs
+ * (front should be the long one for an open-wheeler — if not, flip `yawDeg`)
+ * and the final positions of reported parts for the VehicleCatalog entry.
  *
  * Usage: node tools/asset-pipeline/prepare-car.mjs <car-id> [--skip-textures]
  */
@@ -42,12 +48,47 @@ const CARS = {
     credit: 'F1 Mercedes W13 Concept by Nick Broad (sketchfab.com/nickbroad), CC-BY 4.0',
     scale: 0.01,
     yawDeg: 180, // the model faces -Z; game cars face +Z
-    tyres: ['FrontTyre', 'FrontTyre.004', 'RearTyre', 'RearTyre.001'],
-    spinSplit: ['FronyWheelHub', 'RearWheelHub'], // rims + brake ducts, both sides in one mesh
-    steerSplit: ['FrontWheelHubInner', 'RearWheelHubInner'], // brake drums: steer, no spin
-    cockpitHidden: [/^SteeringWheel/, /^SteeringCog/, /^SteeringColumn/],
-    brakeLights: [/GlassLight/],
-    report: [/^Headrest/, /^HaloWing/, /^T-Cam/, /^Exhaust/, /^WindScreen/, /^SteeringWheel\.013/, /^Seat/],
+    rules: [
+      { cls: 'tyre', path: /(Front|Rear)Tyre/ },
+      { cls: 'steer', path: /WheelHubInner/ }, // brake drums: steer, no spin
+      { cls: 'spin', path: /FronyWheelHub|RearWheelHub/ }, // rims + brake ducts, both sides in one mesh
+      { cls: 'cockpit', path: /Steering/ },
+      { cls: 'brake', path: /GlassLight/ },
+    ],
+    report: [/Headrest/, /HaloWing/, /T-Cam/, /Exhaust/, /WindScreen/, /SteeringWheel\.013/, /Seat\./],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  mcl35m: {
+    source: 'assets-src/models/cars/f1_2021_mclaren_mcl35m/scene.gltf',
+    output: 'public/assets/models/cars/mcl35m.glb',
+    credit: 'F1 2021 McLaren MCL35M by Excalibur (sketchfab.com/excalibur), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    rules: [
+      { cls: 'tyre', material: /^(tread|tyrewall)/ }, // all four tyres in one mesh
+      { cls: 'spin', material: /^rim/ }, // all four rims in one mesh
+      { cls: 'cockpit', material: /^st_wheel/ },
+    ],
+    // No roughness/metal maps: the export marks the tyres as polished metal.
+    materials: [
+      { match: /^(tread|tyrewall)/, metallic: 0, roughness: 0.88 },
+      { match: /^rim/, metallic: 0.9, roughness: 0.3 },
+      { match: /^mcl35m_png$|^mcl35m_h/, metallic: 0.15, roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.15 },
+    ],
+    report: [/st_wheel/, /mcl35m_h/],
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  mp45: {
+    source: 'assets-src/models/cars/mclaren_mp45__formula_1/scene.gltf',
+    output: 'public/assets/models/cars/mp45.glb',
+    credit: 'McLaren MP4/5 || Formula 1 by dark_igorek (sketchfab.com/dark_igorek), CC-BY 4.0',
+    scale: 0.597, // 3.57 m wide as exported; the real car is 2.13 m
+    yawDeg: 0,
+    rules: [
+      { cls: 'tyre', path: /(front|back)_wheels/ }, // tyre + rim per axle, one mesh
+      { cls: 'cockpit', path: /steering wheel/ },
+    ],
+    report: [/steering wheel/, /gear_switch/, /interior_details_4\/Object_18/],
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
 }
@@ -72,6 +113,10 @@ const translate = (x, y, z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]
 const scaleM = (s) => [s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1]
 const yawM = (rad) => [Math.cos(rad), 0, -Math.sin(rad), 0, 0, 1, 0, 0, Math.sin(rad), 0, Math.cos(rad), 0, 0, 0, 0, 1]
 const xf = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]]
+const emptyBox = () => ({ lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity] })
+const growBox = (box, p) => { for (let i = 0; i < 3; i++) { box.lo[i] = Math.min(box.lo[i], p[i]); box.hi[i] = Math.max(box.hi[i], p[i]) } }
+const boxCentre = (b) => b.lo.map((v, i) => (v + b.hi[i]) / 2)
+const fmt = (v) => v.map((x) => x.toFixed(2)).join(', ')
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'draco3d.encoder': await draco3d.createEncoderModule() })
 const doc = await io.read(cfg.source)
@@ -79,94 +124,54 @@ const root = doc.getRoot()
 const scene = root.listScenes()[0]
 const buffer = root.listBuffers()[0]
 
-// --- collect mesh nodes with their source world matrices -------------------
-const meshNodes = []
-scene.traverse((n) => {
-  if (n.getMesh()) meshNodes.push({ node: n, world: Array.from(n.getWorldMatrix()) })
-})
-const findNamed = (name) => {
-  let hit = null
-  scene.traverse((n) => {
-    if (!hit && n.getName() === name) hit = n
-  })
-  if (!hit) throw new Error(`node "${name}" not found`)
-  return hit
-}
-const subtreeMeshNodes = (name) => {
-  const out = new Set()
-  findNamed(name).traverse((n) => {
-    if (n.getMesh()) out.add(n)
-  })
-  return out
+/** Exact bounds of a primitive from its vertex data (after any baking). */
+function primBounds(prim) {
+  const pos = prim.getAttribute('POSITION').getArray()
+  const box = emptyBox()
+  for (let i = 0; i < pos.length; i += 3) growBox(box, [pos[i], pos[i + 1], pos[i + 2]])
+  return box
 }
 
-/** AABB of a primitive after a matrix, from the accessor bounds. */
-function primBounds(prim, m) {
-  const acc = prim.getAttribute('POSITION')
-  const mn = acc.getMin([]), mx = acc.getMax([])
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
-  for (const x of [mn[0], mx[0]]) for (const y of [mn[1], mx[1]]) for (const z of [mn[2], mx[2]]) {
-    const q = xf(m, [x, y, z])
-    for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]) }
+// --- collect primitives with their node path and classification ---------------
+const CLASSES = ['tyre', 'spin', 'steer', 'cockpit', 'brake', 'body']
+const matches = (rule, pathStr, matName) => (rule.path ? rule.path.test(pathStr) : false) || (rule.material ? rule.material.test(matName) : false)
+const prims = [] // { prim, cls, pathStr, matName }
+function walk(node, parentPath) {
+  const pathStr = `${parentPath}/${node.getName()}`
+  const mesh = node.getMesh()
+  if (mesh) {
+    const world = Array.from(node.getWorldMatrix())
+    for (const prim of mesh.listPrimitives()) {
+      const matName = prim.getMaterial()?.getName() ?? ''
+      const rule = cfg.rules.find((r) => matches(r, pathStr, matName))
+      prims.push({ prim, cls: rule ? rule.cls : 'body', pathStr, matName, world })
+    }
   }
-  return { lo, hi }
+  for (const c of node.listChildren()) walk(c, pathStr)
 }
-const nodeBounds = (entry, m) => {
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
-  for (const p of entry.node.getMesh().listPrimitives()) {
-    const b = primBounds(p, mul(m, entry.world))
-    for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], b.lo[i]); hi[i] = Math.max(hi[i], b.hi[i]) }
-  }
-  return { lo, hi, centre: lo.map((v, i) => (v + hi[i]) / 2) }
-}
+for (const c of scene.listChildren()) walk(c, '')
+for (const p of prims) if (!CLASSES.includes(p.cls)) throw new Error(`bad class ${p.cls}`)
 
-// --- root re-frame: scale + yaw, then shift so ground = 0, wheelbase mid = 0 --
+// Pass 1: bake node transforms + scale + yaw into the vertices.
 const R0 = mul(yawM((cfg.yawDeg * Math.PI) / 180), scaleM(cfg.scale))
-const tyreSets = cfg.tyres.map(subtreeMeshNodes)
-const tyreEntries = tyreSets.map((set) => meshNodes.filter((e) => set.has(e.node)))
-const tyreBounds0 = tyreEntries.map((entries) => {
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
-  for (const e of entries) { const b = nodeBounds(e, R0); for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], b.lo[i]); hi[i] = Math.max(hi[i], b.hi[i]) } }
-  return { lo, hi, centre: lo.map((v, i) => (v + hi[i]) / 2) }
-})
-const groundY = Math.min(...tyreBounds0.map((b) => b.lo[1]))
-const zs = tyreBounds0.map((b) => b.centre[2])
-const zMid = (Math.max(...zs) + Math.min(...zs)) / 2
-const xMid = tyreBounds0.reduce((s, b) => s + b.centre[0], 0) / tyreBounds0.length
-const R = mul(translate(-xMid, -groundY, -zMid), R0)
+for (const p of prims) transformPrimitive(p.prim, mul(R0, p.world))
 
-// Final tyre centres → wheel indices (FL, FR, RL, RR = physics order).
-const tyreInfo = tyreBounds0.map((b) => {
-  const c = [b.centre[0] - xMid, b.centre[1] - groundY, b.centre[2] - zMid]
-  const index = (c[2] > 0 ? 0 : 2) + (c[0] < 0 ? 0 : 1)
-  return { centre: c, index, radius: (b.hi[1] - b.lo[1]) / 2, width: b.hi[0] - b.lo[0] }
-})
-if (new Set(tyreInfo.map((t) => t.index)).size !== 4) throw new Error('tyres did not map to four distinct corners: ' + JSON.stringify(tyreInfo))
-const wheelCentre = (i) => tyreInfo.find((t) => t.index === i).centre
+// Shift so the tyres touch y = 0 and the wheelbase midpoint is the origin.
+const tyreBox = emptyBox()
+for (const p of prims) if (p.cls === 'tyre') { const b = primBounds(p.prim); growBox(tyreBox, b.lo); growBox(tyreBox, b.hi) }
+if (!Number.isFinite(tyreBox.lo[0])) throw new Error('no primitives classified as tyre — check the rules')
+const centre = boxCentre(tyreBox)
+const shift = translate(-centre[0], -tyreBox.lo[1], -centre[2])
+for (const p of prims) transformPrimitive(p.prim, shift)
 
-// --- build the target hierarchy --------------------------------------------
-// Name lookups must happen while the source hierarchy is still attached.
-const spinSets = cfg.spinSplit.map(subtreeMeshNodes)
-const steerSets = cfg.steerSplit.map(subtreeMeshNodes)
-for (const child of scene.listChildren()) scene.removeChild(child) // old roots are pruned later
-const mkNode = (name, parent) => { const n = doc.createNode(name); parent.addChild(n); return n }
-const bodyNode = mkNode('body', scene)
-const cockpitNode = mkNode('cockpit_hidden', bodyNode)
-const brakeNode = mkNode('light_brake', bodyNode)
-const wheelNodes = [], spinNodes = []
-for (let i = 0; i < 4; i++) {
-  const c = wheelCentre(i)
-  const w = mkNode(`wheel_${i}`, scene).setTranslation(c)
-  wheelNodes.push(w)
-  spinNodes.push(mkNode(`wheel_${i}_spin`, w))
-}
-const groups = new Map() // target node → primitives
-const addPrim = (target, prim) => { if (!groups.has(target)) groups.set(target, []); groups.get(target).push(prim) }
+// Report boxes (final frame) for named parts, before meshes are rebuilt.
+const report = []
+for (const p of prims) if (cfg.report.some((re) => re.test(p.pathStr) || re.test(p.matName))) { const b = primBounds(p.prim); report.push(`${(p.pathStr.split('/').slice(-2).join('/') + ' [' + p.matName + ']').padEnd(52)} (${fmt(b.lo)}) .. (${fmt(b.hi)})`) }
 
+// --- wheel corners ---------------------------------------------------------------
 /** Copy the triangles listed in `tris` into a fresh primitive with compact, unshared accessors. */
-function subsetPrimitive(prim, tris, positions, indices) {
-  const remap = new Map(), order = []
-  const newIdx = []
+function subsetPrimitive(prim, tris, indices) {
+  const remap = new Map(), order = [], newIdx = []
   for (const t of tris) for (let k = 0; k < 3; k++) {
     const v = indices ? indices[t * 3 + k] : t * 3 + k
     if (!remap.has(v)) { remap.set(v, order.length); order.push(v) }
@@ -182,74 +187,79 @@ function subsetPrimitive(prim, tris, positions, indices) {
     out.setAttribute(sem, doc.createAccessor().setType(src.getType()).setArray(dst).setNormalized(src.getNormalized()).setBuffer(buffer))
   }
   out.setIndices(doc.createAccessor().setType('SCALAR').setArray(order.length > 65535 ? new Uint32Array(newIdx) : new Uint16Array(newIdx)).setBuffer(buffer))
-  void positions
   return out
 }
-
-/** Split a primitive (already expressed in world/model space) into left/right halves by triangle centroid x. */
-function splitByX(prim) {
+/** Split a model-space primitive into the four corners by triangle centroid (x sign, z sign). Returns [FL, FR, RL, RR] or null. */
+function splitCorners(prim) {
   const pos = prim.getAttribute('POSITION').getArray()
   const idx = prim.getIndices()?.getArray() ?? null
   const triCount = idx ? idx.length / 3 : pos.length / 9
-  const left = [], right = []
+  const buckets = [[], [], [], []]
   for (let t = 0; t < triCount; t++) {
-    let x = 0
-    for (let k = 0; k < 3; k++) { const v = idx ? idx[t * 3 + k] : t * 3 + k; x += pos[v * 3] }
-    ;(x < 0 ? left : right).push(t)
+    let x = 0, z = 0
+    for (let k = 0; k < 3; k++) { const v = idx ? idx[t * 3 + k] : t * 3 + k; x += pos[v * 3]; z += pos[v * 3 + 2] }
+    buckets[(z > 0 ? 0 : 2) + (x < 0 ? 0 : 1)].push(t)
   }
-  return { left: left.length ? subsetPrimitive(prim, left, pos, idx) : null, right: right.length ? subsetPrimitive(prim, right, pos, idx) : null }
+  return buckets.map((b) => (b.length ? subsetPrimitive(prim, b, idx) : null))
 }
+const cornerParts = [[], [], [], []] // { prim, cls }
+for (const p of prims) {
+  if (p.cls !== 'tyre' && p.cls !== 'spin' && p.cls !== 'steer') continue
+  splitCorners(p.prim).forEach((half, i) => { if (half) cornerParts[i].push({ prim: half, cls: p.cls }) })
+  p.prim.dispose()
+}
+const wheelInfo = cornerParts.map((parts, i) => {
+  const box = emptyBox()
+  for (const part of parts) if (part.cls === 'tyre') { const b = primBounds(part.prim); growBox(box, b.lo); growBox(box, b.hi) }
+  if (!Number.isFinite(box.lo[0])) throw new Error(`corner ${i} has no tyre triangles`)
+  // The axle centre and radius come from the y/z extent; the x extent (width
+  // and lateral centre) only from vertices out near the tread, so an axle
+  // rod or driveshaft baked into the same mesh cannot drag the wheel inboard.
+  const [, yc, zc] = boxCentre(box)
+  const radius = (box.hi[1] - box.lo[1]) / 2
+  const outer = emptyBox()
+  for (const part of parts) {
+    if (part.cls !== 'tyre') continue
+    const pos = part.prim.getAttribute('POSITION').getArray()
+    for (let k = 0; k < pos.length; k += 3) if (Math.hypot(pos[k + 1] - yc, pos[k + 2] - zc) > radius * 0.6) growBox(outer, [pos[k], pos[k + 1], pos[k + 2]])
+  }
+  return { centre: [(outer.lo[0] + outer.hi[0]) / 2, yc, zc], radius, width: outer.hi[0] - outer.lo[0] }
+})
 
-const inAny = (sets, node) => sets.some((s) => s.has(node))
-const nameMatches = (list, name) => list.some((re) => re.test(name))
-const report = []
-let dropped = 0
-for (const entry of meshNodes) {
-  const { node, world } = entry
-  const M = mul(R, world) // source local → final model space
-  const name = node.getName()
-  const mesh = node.getMesh()
-  const tyreIdx = tyreSets.findIndex((s) => s.has(node))
-  if (nameMatches(cfg.report, name)) { const b = nodeBounds(entry, R); report.push(`${name.padEnd(30)} (${b.lo.map((v) => v.toFixed(2)).join(', ')}) .. (${b.hi.map((v) => v.toFixed(2)).join(', ')})`) }
-  for (const prim of mesh.listPrimitives()) {
-    if (tyreIdx >= 0) {
-      const wi = tyreInfo[tyreIdx].index
-      transformPrimitive(prim, mul(translate(...wheelCentre(wi).map((v) => -v)), M))
-      addPrim(spinNodes[wi], prim)
-    } else if (inAny(spinSets, node) || inAny(steerSets, node)) {
-      const spins = inAny(spinSets, node)
-      transformPrimitive(prim, M)
-      const b = primBounds(prim, I4)
-      const front = (b.lo[2] + b.hi[2]) / 2 > 0
-      const { left, right } = splitByX(prim)
-      for (const [half, side] of [[left, 0], [right, 1]]) {
-        if (!half) continue
-        const wi = (front ? 0 : 2) + side
-        transformPrimitive(half, translate(...wheelCentre(wi).map((v) => -v)))
-        addPrim(spins ? spinNodes[wi] : wheelNodes[wi], half)
-      }
-      prim.dispose()
-    } else {
-      transformPrimitive(prim, M)
-      if (nameMatches(cfg.cockpitHidden, name)) addPrim(cockpitNode, prim)
-      else if (nameMatches(cfg.brakeLights, name)) addPrim(brakeNode, prim)
-      else addPrim(bodyNode, prim)
-    }
+// --- build the target hierarchy ------------------------------------------------
+for (const child of scene.listChildren()) scene.removeChild(child) // old roots are pruned later
+const mkNode = (name, parent) => { const n = doc.createNode(name); parent.addChild(n); return n }
+const bodyNode = mkNode('body', scene)
+const cockpitNode = mkNode('cockpit_hidden', bodyNode)
+const brakeNode = mkNode('light_brake', bodyNode)
+const groups = new Map() // target node → primitives
+const addPrim = (target, prim) => { if (!groups.has(target)) groups.set(target, []); groups.get(target).push(prim) }
+for (let i = 0; i < 4; i++) {
+  const c = wheelInfo[i].centre
+  const hub = mkNode(`wheel_${i}`, scene).setTranslation(c)
+  const spin = mkNode(`wheel_${i}_spin`, hub)
+  for (const part of cornerParts[i]) {
+    transformPrimitive(part.prim, translate(-c[0], -c[1], -c[2]))
+    addPrim(part.cls === 'steer' ? hub : spin, part.prim)
   }
-  mesh.dispose()
-  node.dispose()
 }
-void dropped
+for (const p of prims) {
+  if (p.cls === 'cockpit') addPrim(cockpitNode, p.prim)
+  else if (p.cls === 'brake') addPrim(brakeNode, p.prim)
+  else if (p.cls === 'body') addPrim(bodyNode, p.prim)
+}
+// Detach the source meshes/nodes (their primitives now live in the new meshes).
+for (const mesh of root.listMeshes()) mesh.dispose()
 
 // Join primitives per material inside each target node → one mesh per node.
 let drawCalls = 0, tris = 0
-for (const [target, prims] of groups) {
+for (const [target, list] of groups) {
   const byMat = new Map()
-  for (const p of prims) { const m = p.getMaterial(); if (!byMat.has(m)) byMat.set(m, []); byMat.get(m).push(p) }
+  for (const p of list) { const m = p.getMaterial(); if (!byMat.has(m)) byMat.set(m, []); byMat.get(m).push(p) }
   const mesh = doc.createMesh(target.getName())
-  for (const list of byMat.values()) {
-    const joined = list.length > 1 ? joinPrimitives(list) : list[0]
-    if (list.length > 1) for (const p of list) p.dispose()
+  for (const same of byMat.values()) {
+    const joined = same.length > 1 ? joinPrimitives(same) : same[0]
+    if (same.length > 1) for (const p of same) p.dispose()
     mesh.addPrimitive(joined)
     drawCalls++
     tris += (joined.getIndices()?.getCount() ?? joined.getAttribute('POSITION').getCount()) / 3
@@ -257,7 +267,7 @@ for (const [target, prims] of groups) {
   target.setMesh(mesh)
 }
 
-// --- materials ---------------------------------------------------------------
+// --- materials ------------------------------------------------------------------
 for (const mat of root.listMaterials()) {
   const tr = mat.getExtension('KHR_materials_transmission')
   if (tr) {
@@ -267,6 +277,15 @@ for (const mat of root.listMaterials()) {
     tr.dispose()
     const c = mat.getBaseColorFactor()
     mat.setAlphaMode('BLEND').setBaseColorFactor([c[0], c[1], c[2], Math.min(c[3], 0.45)])
+  }
+  for (const o of cfg.materials ?? []) {
+    if (!o.match.test(mat.getName())) continue
+    if (o.metallic !== undefined) mat.setMetallicFactor(o.metallic)
+    if (o.roughness !== undefined) mat.setRoughnessFactor(o.roughness)
+    if (o.clearcoat !== undefined) {
+      const ext = doc.createExtension(ALL_EXTENSIONS.find((e) => e.EXTENSION_NAME === 'KHR_materials_clearcoat'))
+      mat.setExtension('KHR_materials_clearcoat', ext.createClearcoat().setClearcoatFactor(o.clearcoat).setClearcoatRoughnessFactor(o.clearcoatRoughness ?? 0.2))
+    }
   }
 }
 root.getAsset().copyright = cfg.credit
@@ -310,14 +329,12 @@ fs.mkdirSync(path.dirname(cfg.output), { recursive: true })
 await io.write(cfg.output, doc)
 
 // --- report ----------------------------------------------------------------------
-const bodyB = (() => {
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]
-  for (const p of bodyNode.getMesh().listPrimitives()) { const b = primBounds(p, I4); for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], b.lo[i]); hi[i] = Math.max(hi[i], b.hi[i]) } }
-  return { lo, hi }
-})()
-const fl = wheelCentre(0), fr = wheelCentre(1), rl = wheelCentre(2), rr = wheelCentre(3)
+const bodyBox = emptyBox()
+for (const p of bodyNode.getMesh().listPrimitives()) { const b = primBounds(p); growBox(bodyBox, b.lo); growBox(bodyBox, b.hi) }
+const [fl, fr, rl, rr] = wheelInfo.map((w) => w.centre)
 console.log(`\n${cfg.output}: ${(fs.statSync(cfg.output).size / 1048576).toFixed(2)} MB, ${drawCalls} draw calls, ${Math.round(tris / 1000)}k tris, ${root.listTextures().length} textures, ${((Date.now() - t0) / 1000).toFixed(1)} s`)
 console.log('wheel centres FL/FR/RL/RR:', [fl, fr, rl, rr].map((c) => `(${c.map((v) => v.toFixed(3)).join(', ')})`).join(' '))
-console.log(`wheelbase ${(fl[2] - rl[2]).toFixed(3)}  track front ${(fr[0] - fl[0]).toFixed(3)} rear ${(rr[0] - rl[0]).toFixed(3)}  radius ${tyreInfo.map((t) => t.radius.toFixed(3)).join('/')}  width ${tyreInfo.map((t) => t.width.toFixed(3)).join('/')}`)
-console.log(`body bounds (${bodyB.lo.map((v) => v.toFixed(2)).join(', ')}) .. (${bodyB.hi.map((v) => v.toFixed(2)).join(', ')}) → length ${(bodyB.hi[2] - bodyB.lo[2]).toFixed(2)} width ${(bodyB.hi[0] - bodyB.lo[0]).toFixed(2)} height ${bodyB.hi[1].toFixed(2)}`)
-console.log('named parts (final frame):\n  ' + report.join('\n  '))
+console.log(`wheelbase ${(fl[2] - rl[2]).toFixed(3)}  track front ${(fr[0] - fl[0]).toFixed(3)} rear ${(rr[0] - rl[0]).toFixed(3)}  radius ${wheelInfo.map((w) => w.radius.toFixed(3)).join('/')}  width ${wheelInfo.map((w) => w.width.toFixed(3)).join('/')}`)
+console.log(`body bounds (${fmt(bodyBox.lo)}) .. (${fmt(bodyBox.hi)}) → length ${(bodyBox.hi[2] - bodyBox.lo[2]).toFixed(2)} width ${(bodyBox.hi[0] - bodyBox.lo[0]).toFixed(2)} height ${bodyBox.hi[1].toFixed(2)}`)
+console.log(`overhang front ${(bodyBox.hi[2] - fl[2]).toFixed(2)} rear ${(rl[2] - bodyBox.lo[2]).toFixed(2)} (front should be the longer one; otherwise flip yawDeg)`)
+console.log('reported parts (final frame):\n  ' + report.join('\n  '))

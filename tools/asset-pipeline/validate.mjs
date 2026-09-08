@@ -13,8 +13,8 @@ if (!existsSync(manifestPath)) {
   process.exit(0)
 }
 const budgets = {
-  // Licensed cars: Draco geometry + KTX2 textures (the W13 is ~9 MB at 100k tris / 17 textures).
-  model: { max: 12 * 1024 * 1024, ext: ['.glb', '.gltf'] },
+  // Licensed cars: Draco geometry + KTX2 textures (W13 ~9 MB at 100k tris, MP4/5 ~18 MB at 329k tris / 16 textures).
+  model: { max: 20 * 1024 * 1024, ext: ['.glb', '.gltf'] },
   texture: { max: 1024 * 1024, ext: ['.ktx2', '.webp', '.jpg', '.jpeg', '.png'] },
   audio: { max: 500 * 1024, ext: ['.ogg', '.mp3', '.webm', '.wav'] },
   data: { max: 2 * 1024 * 1024, ext: ['.json'] },

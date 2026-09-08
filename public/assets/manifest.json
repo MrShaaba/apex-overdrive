@@ -1,12 +1,24 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-07T20:45:32.688Z",
+  "generatedAt": "2026-09-07T20:59:24.769Z",
   "assets": [
+    {
+      "id": "model.cars.mcl35m",
+      "type": "model",
+      "file": "models/cars/mcl35m.glb",
+      "bytes": 5872828
+    },
+    {
+      "id": "model.cars.mp45",
+      "type": "model",
+      "file": "models/cars/mp45.glb",
+      "bytes": 18821544
+    },
     {
       "id": "model.cars.w13",
       "type": "model",
       "file": "models/cars/w13.glb",
-      "bytes": 9349616
+      "bytes": 9349624
     },
     {
       "id": "hdri.nqweba_dawn_2k",

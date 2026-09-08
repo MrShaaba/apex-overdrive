@@ -56,7 +56,7 @@ Integration points:
 ## Budgets (enforced by `npm run assets:validate`)
 | Type | Max per file | Notes |
 |---|---|---|
-| model (`.glb`) | 12 MB | Draco geometry + KTX2 textures (see prepare-car.mjs); licensed cars run ~100k tris |
+| model (`.glb`) | 20 MB | Draco geometry + KTX2 textures (see prepare-car.mjs); licensed cars run 100–330k tris |
 | texture (`.ktx2`, `.webp`, `.jpg`, `.png`) | 1 MB | ≤ 2048², prefer KTX2/Basis |
 | audio (`.ogg`, `.mp3`, `.webm`) | 500 kB | 44.1 kHz mono for positional sounds |
 | hdri (`.hdr`) | 8 MB | 2048×1024 RGBE, RLE (≈6 MB) |
