@@ -22,6 +22,7 @@ import { clamp, fbm2D, hashString, lerp, smoothstep } from '../core/MathUtils'
 import { TrackSpline } from './Spline'
 import type { TrackDefinition, TrackFeature } from './TrackCatalog'
 import { HazardSystem } from './Hazards'
+import { modelLibrary } from '../vehicles/CarModelLoader'
 import { buildProps, type CrowdZone, type PropsResult } from './TrackProps'
 import { Logger } from '../core/Logger'
 
@@ -153,6 +154,11 @@ function buildSkirt(spline: TrackSpline, innerOffset: number, outerOffset: numbe
   return g
 }
 
+/** Scenery placeholder for circuit models, which carry their own props. */
+function emptyProps(): PropsResult {
+  return { root: new THREE.Group(), crowdZones: [], lampPositions: [], updateVisibility() {}, setNight() {}, dispose() {} }
+}
+
 function addTrimeshCollider(physics: PhysicsWorld, geometry: THREE.BufferGeometry, surface: SurfaceType, groups = GROUND_GROUPS, wall = false): void {
   const pos = geometry.attributes.position.array as Float32Array
   const idx = geometry.index ? new Uint32Array(geometry.index.array) : undefined
@@ -174,6 +180,13 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   const disposables: (THREE.BufferGeometry | THREE.Material)[] = []
   const bounds = spline.bounds()
   const seed = hashString(def.id)
+
+  // Licensed circuit: the file supplies road, terrain, walls and scenery and
+  // the procedural surfaces/terrain/props are skipped. A missing file falls
+  // back to the procedural build around the same centreline.
+  const modelTemplate = def.model && (await modelLibrary.preload(def.model.file)) ? modelLibrary.get(def.model.file) : null
+  if (def.model && !modelTemplate) log.warn(`${def.name}: circuit model ${def.model.file} unavailable — building it procedurally`)
+  const useModel = modelTemplate !== null
 
   // Feature lookups.
   const tunnels = def.features.filter((f): f is Extract<TrackFeature, { type: 'tunnel' }> => f.type === 'tunnel')
@@ -219,7 +232,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     }
     return h
   }
-  const terrainHeight = (x: number, z: number): number => {
+  const proceduralTerrainHeight = (x: number, z: number): number => {
     const p = new THREE.Vector3(x, 0, z)
     const i = spline.nearestIndex(p)
     const s = spline.samples[i]
@@ -248,6 +261,8 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     const blend = 1 - smoothstep(corridor, corridor + 30, dist)
     return lerp(h, s.position.y - 1.0, blend)
   }
+  // Circuit models ship a flat terrain plane at y = 0.
+  const terrainHeight = useModel ? (): number => 0 : proceduralTerrainHeight
   const shortcutClearance = (x: number, z: number): number => {
     let best = Infinity
     for (const sc of shortcutSplines) {
@@ -259,10 +274,61 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   }
 
   // ---------------------------------------------------------------------------
-  // Road surfaces
+  // Licensed circuit model: road, terrain, walls and scenery from the file
   // ---------------------------------------------------------------------------
+  let roadMat: THREE.MeshStandardMaterial | null = null
+  let puddleMat: THREE.MeshPhysicalMaterial | null = null
+  let snowMat: THREE.MeshStandardMaterial | null = null
+  let shoulderMat: THREE.MeshStandardMaterial | null = null
+  let modelRoadRoughness = 0.88
+  if (modelTemplate) {
+    const model = modelTemplate.clone(true)
+    model.name = 'track-model'
+    root.add(model)
+    const mount = (name: string, surface: SurfaceType | null, wall: boolean, cast: boolean) => {
+      const node = model.getObjectByName(name)
+      if (!node) return
+      node.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return
+        o.castShadow = cast
+        o.receiveShadow = true
+        // Per-track material clones: weather tinting must not touch the cached template.
+        const mats = (Array.isArray(o.material) ? o.material : [o.material]).map((m) => (m as THREE.Material).clone())
+        o.material = mats.length === 1 ? mats[0] : mats
+        disposables.push(...mats)
+        if (name === 'road' && !roadMat && mats[0] instanceof THREE.MeshStandardMaterial) {
+          roadMat = mats[0]
+          modelRoadRoughness = roadMat.roughness
+        }
+        if (surface) addTrimeshCollider(physics, o.geometry, surface, wall ? WALL_GROUPS : GROUND_GROUPS, wall)
+      })
+    }
+    mount('road', 'asphalt', false, false)
+    mount('terrain', 'grass', false, false)
+    mount('wall', 'concrete', true, true)
+    mount('prop', null, false, true)
+    // A wide grass apron under and beyond the model's terrain plane so a car
+    // that runs off the map never falls through the world.
+    const centre = bounds.getCenter(new THREE.Vector3())
+    const apronGeo = new THREE.PlaneGeometry(6000, 6000, 1, 1)
+    apronGeo.rotateX(-Math.PI / 2)
+    apronGeo.translate(centre.x, -0.08, centre.z)
+    const apronTex = textures.ground('grass', env.groundColor)
+    apronTex.repeat.set(400, 400)
+    const apronMat = new THREE.MeshStandardMaterial({ map: apronTex, roughness: 0.98 })
+    const apron = new THREE.Mesh(apronGeo, apronMat)
+    apron.receiveShadow = true
+    root.add(apron)
+    addTrimeshCollider(physics, apronGeo, 'grass')
+    disposables.push(apronGeo, apronMat)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Road surfaces (procedural circuits)
+  // ---------------------------------------------------------------------------
+  if (!useModel) {
   const roadTex = textures.road(env.roadColor)
-  const roadMat = new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.88, metalness: 0.02, color: 0xffffff })
+  roadMat = new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.88, metalness: 0.02, color: 0xffffff })
   const roadGeo = buildRibbon(spline, { halfWidthAt: () => halfWidth, lift: 0.02, uvScale: 1 })
   const road = new THREE.Mesh(roadGeo, roadMat)
   road.receiveShadow = true
@@ -272,7 +338,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   disposables.push(roadGeo, roadMat)
 
   // Puddle overlay (visible when wet).
-  const puddleMat = new THREE.MeshPhysicalMaterial({ color: 0x0b0f14, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0, envMapIntensity: 2.2, clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false })
+  puddleMat = new THREE.MeshPhysicalMaterial({ color: 0x0b0f14, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0, envMapIntensity: 2.2, clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false })
   puddleMat.alphaMap = textures.get('puddles', (ctx, size, rng) => {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, size, size)
@@ -296,7 +362,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   disposables.push(puddleMat)
 
   // Snow overlay on the road (tinted white plane over asphalt).
-  const snowMat = new THREE.MeshStandardMaterial({ color: 0xf2f5f9, roughness: 0.95, transparent: true, opacity: 0, depthWrite: false })
+  snowMat = new THREE.MeshStandardMaterial({ color: 0xf2f5f9, roughness: 0.95, transparent: true, opacity: 0, depthWrite: false })
   const snowOverlay = new THREE.Mesh(roadGeo, snowMat)
   snowOverlay.position.y = 0.012
   snowOverlay.renderOrder = 1
@@ -339,7 +405,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   // Shoulders (run-off).
   const shoulderKind: SurfaceType = env.snow ? 'snow' : def.theme === 'island' ? 'sand' : def.theme === 'badlands' ? 'dirt' : def.theme === 'metro' || def.theme === 'neon' || def.theme === 'shipyard' ? 'concrete' : 'grass'
   const shoulderTexKind = shoulderKind === 'concrete' ? 'concrete' : shoulderKind === 'snow' ? 'snow' : shoulderKind === 'sand' ? 'sand' : shoulderKind === 'dirt' ? 'dirt' : 'grass'
-  const shoulderMat = new THREE.MeshStandardMaterial({ map: textures.ground(shoulderTexKind, env.groundColor), roughness: 0.98 })
+  shoulderMat = new THREE.MeshStandardMaterial({ map: textures.ground(shoulderTexKind, env.groundColor), roughness: 0.98 })
   shoulderMat.map!.repeat.set(2, 60)
   const shoulderGeo = buildRibbon(spline, { halfWidthAt: () => 7, lift: -0.02, uvScale: 1 })
   // We need left and right shoulders: use offsets.
@@ -358,6 +424,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     }
   }
   disposables.push(shoulderMat)
+  } // end procedural road surfaces
 
   // ---------------------------------------------------------------------------
   // Barriers (continuous, gapped for shortcuts and pit entries)
@@ -374,7 +441,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     for (const p of pits) if (p.side === side && (Math.abs(t - p.from) < 0.01 || Math.abs(t - p.to) < 0.01 || (t > p.from && t < p.to))) return true
     return false
   }
-  {
+  if (!useModel) {
     const barrierHeight = 1.0
     const offset = halfWidth + 6.0
     const segs = 5 // samples per barrier segment (10 m)
@@ -439,7 +506,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   // ---------------------------------------------------------------------------
   // Terrain mesh + collider
   // ---------------------------------------------------------------------------
-  {
+  if (!useModel) {
     const margin = 700
     const minX = bounds.min.x - margin
     const maxX = bounds.max.x + margin
@@ -837,8 +904,8 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     tracksideCameras.push(p)
   }
 
-  // Scenery + hazards.
-  const props = buildProps(def, spline, halfWidth, terrainHeight, textures, physics, quality.propDensity, bounds, shortcutClearance)
+  // Scenery + hazards (a circuit model brings its own scenery).
+  const props = useModel ? emptyProps() : buildProps(def, spline, halfWidth, terrainHeight, textures, physics, quality.propDensity, bounds, shortcutClearance)
   root.add(props.root)
   const hazards = new HazardSystem(physics, textures)
   for (const f of def.features) if (f.type === 'hazard') hazards.add(f, spline, halfWidth, terrainHeight)
@@ -868,13 +935,15 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     terrainHeight,
     spawnPose,
     setWeatherVisual(wetness, snow, nightFactor) {
-      roadMat.roughness = 0.88 - wetness * 0.62
-      roadMat.metalness = 0.02 + wetness * 0.12
-      roadMat.color.setScalar(1 - wetness * 0.35)
-      roadMat.envMapIntensity = 1 + wetness * 1.5
-      puddleMat.opacity = wetness * 0.85
-      snowMat.opacity = snow * 0.85
-      shoulderMat.color.setScalar(1 - wetness * 0.25)
+      if (roadMat) {
+        roadMat.roughness = (useModel ? modelRoadRoughness : 0.88) - wetness * 0.62
+        roadMat.metalness = 0.02 + wetness * 0.12
+        roadMat.color.setScalar(1 - wetness * 0.35)
+        roadMat.envMapIntensity = 1 + wetness * 1.5
+      }
+      if (puddleMat) puddleMat.opacity = wetness * 0.85
+      if (snowMat) snowMat.opacity = snow * 0.85
+      if (shoulderMat) shoulderMat.color.setScalar(1 - wetness * 0.25)
       props.setNight(nightFactor)
     },
     update(dt, cameraPos, drawDistance, time) {

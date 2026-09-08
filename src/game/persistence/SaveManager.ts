@@ -7,6 +7,7 @@
  */
 
 import { bus } from '../core/EventBus'
+import { TRACK_CATALOG } from '../tracks/TrackCatalog'
 import { Logger } from '../core/Logger'
 import { defaultSettings, type Settings } from '../core/Settings'
 import { LocalStorageAdapter, type StorageAdapter } from './StorageAdapter'
@@ -111,7 +112,7 @@ export function createDefaultProfile(): PlayerProfile {
     ownedCars: ['v8-roadster'],
     selectedCar: 'v8-roadster',
     cars: {},
-    unlockedTracks: ['island-causeway', 'lakeside-circuit', 'woodland-raceway'],
+    unlockedTracks: ['island-causeway', 'lakeside-circuit', 'woodland-raceway', 'drift-park'],
     career: { chapter: 0, completedEvents: [], eventStars: {} },
     stats: {
       racesEntered: 0,
@@ -184,6 +185,8 @@ export class SaveManager {
           controls: { ...defaults.controls, ...this.profile.settings?.controls },
           gameplay: { ...defaults.gameplay, ...this.profile.settings?.gameplay },
         }
+        // Circuits added after this profile was created unlock straight away at their level.
+        for (const t of TRACK_CATALOG) if (t.unlockLevel <= this.profile.level && !this.profile.unlockedTracks.includes(t.id)) this.profile.unlockedTracks.push(t.id)
         log.info(`Profile loaded (v${this.profile.version}, ${this.profile.ownedCars.length} cars)`)
       } else {
         log.info('No profile found — creating a new one')

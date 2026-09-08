@@ -1,7 +1,37 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-08T16:32:30.151Z",
+  "generatedAt": "2026-09-08T17:45:47.117Z",
   "assets": [
+    {
+      "id": "model.cars.challenger",
+      "type": "model",
+      "file": "models/cars/challenger.glb",
+      "bytes": 1703588
+    },
+    {
+      "id": "model.cars.charger",
+      "type": "model",
+      "file": "models/cars/charger.glb",
+      "bytes": 17602832
+    },
+    {
+      "id": "model.cars.countach",
+      "type": "model",
+      "file": "models/cars/countach.glb",
+      "bytes": 4373056
+    },
+    {
+      "id": "model.cars.enforcer",
+      "type": "model",
+      "file": "models/cars/enforcer.glb",
+      "bytes": 15407920
+    },
+    {
+      "id": "model.cars.huracan",
+      "type": "model",
+      "file": "models/cars/huracan.glb",
+      "bytes": 1804100
+    },
     {
       "id": "model.cars.mcl35m",
       "type": "model",
@@ -13,6 +43,12 @@
       "type": "model",
       "file": "models/cars/mp45.glb",
       "bytes": 18821544
+    },
+    {
+      "id": "model.cars.revuelto",
+      "type": "model",
+      "file": "models/cars/revuelto.glb",
+      "bytes": 8775092
     },
     {
       "id": "model.cars.sf23",
@@ -31,6 +67,12 @@
       "type": "model",
       "file": "models/cockpit/mclaren_wheel.glb",
       "bytes": 700980
+    },
+    {
+      "id": "model.tracks.drift",
+      "type": "model",
+      "file": "models/tracks/drift.glb",
+      "bytes": 15683656
     },
     {
       "id": "hdri.nqweba_dawn_2k",

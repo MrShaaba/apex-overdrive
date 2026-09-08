@@ -48,6 +48,16 @@ Integration points:
   four wheels are located from the ground-contact patches (axle from the tyre top, width from
   the tread-edge rings) and carved out of the body by a per-wheel cylinder test; `decimate`
   runs meshoptimizer's simplifier afterwards (713k → 285k triangles for the SF-23).
+* **Circuits** — `node tools/asset-pipeline/prepare-track.mjs <track-id>` turns a raw circuit model into
+  `public/assets/models/tracks/<id>.glb` with `road`, `terrain`, `wall` and `prop` nodes (walls
+  become trimesh wall colliders, road/terrain ground colliders, props are scenery) and derives
+  the lap centreline from the road mesh alone: the road is rasterised at 1 m, thinned to a
+  skeleton, stripped of dead ends, turned into a junction graph and the simple cycle enclosing
+  the largest area is the lap. Control points go to `src/game/tracks/data/<id>.points.json`
+  and a `TrackDefinition` with `model` uses them; `TrackBuilder` then skips its procedural
+  surfaces, terrain, barriers and props but keeps the spline, grid, checkpoints, pit lane, DRS
+  zones, gantry and minimap. `node tools/asset-pipeline/dump-gltf.mjs <scene.gltf>` prints a
+  model's node/material/bounds table when writing a config.
 * **Cockpit props** — a config with `kind: 'prop'` (the McLaren steering wheel) skips the wheel
   rig: the model is scaled, its `pivot` moved to the origin and everything joined under a `prop`
   node. `render/CockpitWheel.ts` clones it into the spinner when Engine has preloaded it and

@@ -1,10 +1,16 @@
 /**
- * The nine circuits. Control points are metres (X east, Y up, Z north). Every
+ * The circuits. Control points are metres (X east, Y up, Z north). Every
  * feature is declared in normalised spline parameter space (0..1) so a layout
  * can be re-shaped without breaking its tunnels, bridges or crowd zones.
+ *
+ * Nine circuits are procedural; a licensed circuit model (`model`) supplies
+ * its road, terrain, walls and scenery from a .glb built by
+ * tools/asset-pipeline/prepare-track.mjs, with its control points derived
+ * from the road mesh by the same tool (data/*.points.json).
  */
 
 import type { SurfaceType } from '../physics/Surfaces'
+import driftPoints from './data/drift.points.json'
 
 export type TrackTheme = 'island' | 'alpine' | 'badlands' | 'woodland' | 'metro' | 'glacier' | 'shipyard' | 'neon' | 'lakeside'
 export type WeatherKind = 'clear' | 'cloudy' | 'overcast' | 'rain' | 'storm' | 'fog' | 'snow' | 'blizzard'
@@ -38,12 +44,22 @@ export interface TrackEnvironment {
   buildingDensity: number
 }
 
+/** Licensed circuit model; the road/terrain/wall/prop nodes are baked by prepare-track.mjs. */
+export interface TrackModelRef {
+  /** Path under the app base URL, e.g. 'assets/models/tracks/drift.glb'. */
+  file: string
+  /** One-line credit (licence requirement). */
+  credit: string
+}
+
 export interface TrackDefinition {
   id: string
   name: string
   location: string
   description: string
   theme: TrackTheme
+  /** When set, the circuit's geometry comes from this file; `points` is its derived centreline. */
+  model?: TrackModelRef
   points: [number, number, number][]
   closed: boolean
   width: number
@@ -350,6 +366,28 @@ export const TRACK_CATALOG: TrackDefinition[] = [
       { type: 'hazard', kind: 'gate', at: 0.85, period: 13, side: 1 },
       { type: 'shortcut', points: [[40, 3, 200], [0, 3, 120], [-60, 3, 40], [-140, 3, -60]], entry: 0.46, exit: 0.9, surface: 'concrete', width: 7 },
       { type: 'pit', from: 0.92, to: 0.99, side: 1 },
+      { type: 'sector', at: 0.33 },
+      { type: 'sector', at: 0.66 },
+    ],
+  },
+  {
+    id: 'drift-park',
+    name: 'Drift Park',
+    location: 'Licensed circuit model',
+    description: 'A real drift circuit: 1.1 km of tight asphalt hairpins between guard rails and barrier cylinders, with a wide open paddock to slide around in. Every bit of it is drivable — the lap follows the perimeter of the road network.',
+    theme: 'woodland',
+    model: { file: 'assets/models/tracks/drift.glb', credit: '"Drift Race Track Free" by Nicholas-3D on Sketchfab, CC-BY-ND 4.0' },
+    closed: true,
+    width: 12,
+    difficulty: 3,
+    unlockLevel: 1,
+    defaultLaps: 4,
+    lengthKm: 1.15,
+    bestLapReference: 54,
+    environment: env({ terrain: 'flat', terrainAmplitude: 0, defaultHour: 15, skyTint: '#a4d0ff', groundColor: '#4f7a3a', treeDensity: 0, buildingDensity: 0, fogDensity: 0.0012, weatherOptions: ['clear', 'cloudy', 'overcast', 'rain'] }),
+    points: driftPoints.points as [number, number, number][],
+    features: [
+      { type: 'pit', from: 0.13, to: 0.2, side: 1 },
       { type: 'sector', at: 0.33 },
       { type: 'sector', at: 0.66 },
     ],
