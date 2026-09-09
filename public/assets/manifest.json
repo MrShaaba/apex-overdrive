@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-09T01:22:23.151Z",
+  "generatedAt": "2026-09-09T04:25:05.625Z",
   "assets": [
     {
       "id": "model.cars.challenger",
@@ -73,6 +73,12 @@
       "type": "model",
       "file": "models/props/city.glb",
       "bytes": 7651184
+    },
+    {
+      "id": "model.tracks.bugatti",
+      "type": "model",
+      "file": "models/tracks/bugatti.glb",
+      "bytes": 20207608
     },
     {
       "id": "model.tracks.drift",

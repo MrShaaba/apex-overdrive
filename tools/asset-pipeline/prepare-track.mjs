@@ -9,11 +9,15 @@
  *     material name, first match wins) into road / kerb / pit / gravel /
  *     terrain / wall / overlay / prop; the runtime maps those names to
  *     colliders and surfaces (overlay and prop get none);
- *  2. derives the centreline from the road (+ kerb) surface alone: the
- *     asphalt is rasterised (1 m cells, coarser for big circuits), thinned to
- *     a one-pixel skeleton, stripped of every dead end (paddocks, pit lanes
- *     and access roads are cul-de-sacs off the lap), turned into a junction
- *     graph, and the simple cycle enclosing the largest area is the lap;
+ *  2. derives the centreline from the lap surface: the core road (+ kerbs) is
+ *     rasterised (1–2 m cells; `res` overrides; `coreRadius` lets general
+ *     asphalt within that distance of the core rules join it, for models whose
+ *     track shares a material with paddocks and car parks), the non-road cells
+ *     reachable from the border are the outside and the largest enclosed region
+ *     is the infield, and the road cells equidistant from both are the lap
+ *     band — paddocks, pit lanes and access roads never separate infield from
+ *     outside, so they drop out; the band is thinned, its few junctions
+ *     resolved by the largest-area cycle, then re-centred across the full road;
  *  3. samples the road height under every point, orients the loop in the
  *     circuit's real direction (`direction`, as seen from above), starts it at
  *     the model's start marker (`startMarker`: start lights, gantry, painted
@@ -54,6 +58,7 @@ const TRACKS = {
     scale: 1,
     yawDeg: 0,
     direction: 'cw', // seen from above in three's frame; Drift Park has no inherent direction, this keeps its data stable
+    tracer: 'skeleton',
     rules: [
       { cls: 'road', path: /\/Road/ },
       { cls: 'terrain', path: /\/Terrain/ },
@@ -63,6 +68,32 @@ const TRACKS = {
     materials: [{ match: /Leaf/i, alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true }],
     textures: { color: 2048, normal: 1024, other: 1024 },
     controlSpacing: 14,
+  },
+  bugatti: {
+    source: 'assets-src/models/tracks/bugatti_circuit_2017_layout/scene.gltf',
+    output: 'public/assets/models/tracks/bugatti.glb',
+    pointsOut: 'src/game/tracks/data/bugatti.points.json',
+    credit: 'Bugatti Circuit 2017 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'cw',
+    controlSpacing: 10,
+    res: 1, // the edge-line strips are under 2 m wide
+    coreRadius: 9,
+    coreClose: 4,
+    startMarker: /^podium/, // the podium sits on the pit building at the start line
+    rules: [
+      { cls: 'road', material: /^ROADTSTRIPE/ }, // the track's edge-line strips seed the lap
+      { cls: 'road', material: /^01_-_Default|^09_-_Defaultfeu|^TRANSIT|^ROADREAL|^pass/, lap: 'near' }, // the asphalt: track, pit lane, paddock and car parks share it; TRANSIT and ROADREAL* are tarmac variants of some stretches; pass* is the Dunlop bridge deck
+      { cls: 'kerb', material: /^ROADKERB/ },
+      { cls: 'pit', material: /^ROAD_02/ },
+      { cls: 'overlay', material: /^04_-_Default|^08_-_Default/ },
+      { cls: 'terrain', material: /^GRASS|^BACKGRD/ },
+      { cls: 'wall', material: /^TYREW|^GUARD|^WALL_|^WALLSPON|^BLOCKS|^FENCE_|^FPOLE/ },
+    ],
+    decimate: { wall: 0.4, prop: 0.5, terrain: 0.7 },
+    noShadow: /trees|pines|TREE|GRASS|BACKGRD|TRANSIT|FPOLE|CORNERWORKER|cameraman|TEAMMEMBERS|GSSEATS|EQUIP|^CARS|RUBBER|FENCE/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
   },
   spa: {
     source: 'assets-src/models/tracks/circuit_de_spa-francorchamps_2022_layout/scene.gltf',
@@ -162,7 +193,7 @@ const roadTris = [...coreTris, ...nearTris] // [[x,y,z]×3] in final metres; hei
 let rlo = [Infinity, Infinity], rhi = [-Infinity, -Infinity]
 for (const tri of roadTris) for (const [x, , z] of tri) { rlo = [Math.min(rlo[0], x), Math.min(rlo[1], z)]; rhi = [Math.max(rhi[0], x), Math.max(rhi[1], z)] }
 const extent = Math.max(rhi[0] - rlo[0], rhi[1] - rlo[1])
-const RES = extent > 1400 ? 2 : 1
+const RES = cfg.res ?? (extent > 1400 ? 2 : 1)
 const PAD = 4
 const gx0 = Math.floor(rlo[0] / RES) * RES - PAD * RES, gz0 = Math.floor(rlo[1] / RES) * RES - PAD * RES
 const GW = Math.ceil((rhi[0] - gx0) / RES) + PAD + 1, GH = Math.ceil((rhi[1] - gz0) / RES) + PAD + 1
@@ -192,18 +223,19 @@ const rasterise = (tris) => {
 const heightGrid = new Float32Array(GW * GH).fill(NaN)
 for (const tri of coreTris) for (const [x, y, z] of tri) heightGrid[cellZ(z) * GW + cellX(x)] = y
 const roadHeightNear = (x, z) => { for (let r = 0; r <= 3; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && Number.isFinite(heightGrid[Z * GW + X])) return heightGrid[Z * GW + X] } return NaN }
-const rasteriseEdges = (tris) => {
+const rasteriseEdges = (tris, checkHeight = true) => {
   const g = new Uint8Array(GW * GH)
   const mark = (x, z) => { if (x >= 0 && z >= 0 && x < GW && z < GH) g[z * GW + x] = 1 }
   for (const tri of tris) for (let e = 0; e < 3; e++) {
     const a = tri[e], b = tri[(e + 1) % 3]
     const low = Math.min(a[1], b[1])
-    const hr = roadHeightNear(cellX((a[0] + b[0]) / 2), cellZ((a[2] + b[2]) / 2))
-    if (!Number.isFinite(hr) || low > hr + 2.5 || low < hr - 4) continue
+    if (checkHeight) { const hr = roadHeightNear(cellX((a[0] + b[0]) / 2), cellZ((a[2] + b[2]) / 2)); if (!Number.isFinite(hr) || low > hr + 2.5 || low < hr - 4) continue }
     let x0 = cellX(a[0]), z0 = cellZ(a[2]); const x1 = cellX(b[0]), z1 = cellZ(b[2])
+    if (!Number.isFinite(x0 + z0 + x1 + z1)) continue
     const dx = Math.abs(x1 - x0), dz = Math.abs(z1 - z0), sx = x0 < x1 ? 1 : -1, sz = z0 < z1 ? 1 : -1
+    if (dx + dz > 4000) continue // a broken edge spanning the map is not a wall
     let err = dx - dz
-    for (let guard = 0; guard < 100000; guard++) {
+    for (let guard = 0; guard <= dx + dz + 2; guard++) {
       mark(x0, z0)
       if (x0 === x1 && z0 === z1) break
       const e2 = 2 * err
@@ -214,9 +246,20 @@ const rasteriseEdges = (tris) => {
   return g
 }
 const morph = (g, fn) => { const o = new Uint8Array(GW * GH); for (let z = 0; z < GH; z++) for (let x = 0; x < GW; x++) { let cnt = 0; for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) cnt += at(g, x + dx, z + dz); o[z * GW + x] = fn(cnt, g[z * GW + x]) ? 1 : 0 } return o }
+const dilate = (g, r) => { const o = new Uint8Array(GW * GH); for (let z = 0; z < GH; z++) for (let x = 0; x < GW; x++) { if (!g[z * GW + x]) continue; for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dz * dz <= r * r) { const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH) o[Z * GW + X] = 1 } } return o }
 let grid = rasterise(coreTris)
+// Thin seed strips (edge lines under a metre wide) rarely cover a cell centre, so
+// their edges are marked too — a seed line must never break.
+if (cfg.coreRadius) { const e = rasteriseEdges(coreTris, false); for (let i = 0; i < grid.length; i++) if (e[i]) grid[i] = 1 }
+// `coreRadius`: when the track shares its asphalt material with paddocks and car
+// parks, the core rules only seed the lap (edge lines, kerbs) and the general
+// asphalt within this many metres of a seed joins the core; the rest stays out.
+if (cfg.coreRadius && nearTris.length) { const near = rasterise(nearTris), mask = dilate(grid, Math.max(1, Math.round(cfg.coreRadius / RES))); if (process.env.DEBUG_BAND) { const cells = (g, step) => { const o = []; for (let i = 0; i < g.length; i += step) if (g[i]) o.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); return o }; fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-core.json`), JSON.stringify({ band: cells(grid, 1), infield: cells(near, 3), res: RES })) } for (let i = 0; i < grid.length; i++) if (near[i] && mask[i]) grid[i] = 1 }
 grid = morph(grid, (cnt) => cnt > 0)
 grid = morph(grid, (cnt) => cnt === 9)
+// `coreClose`: a wider morphological close on the core, for cores built from sparse
+// seeds (thin edge-line strips leave slits in the band that the seed discs miss).
+if (cfg.coreClose) { const r = Math.max(1, Math.round(cfg.coreClose / RES)); const inv = (g) => { const o = new Uint8Array(g.length); for (let i = 0; i < g.length; i++) o[i] = g[i] ? 0 : 1; return o }; grid = inv(dilate(inv(dilate(grid, r)), r)) }
 let fullGrid = rasterise(roadTris)
 fullGrid = morph(fullGrid, (cnt) => cnt > 0)
 fullGrid = morph(fullGrid, (cnt) => cnt === 9)
@@ -251,7 +294,87 @@ const thin = (g) => {
   }
   return img
 }
-let skel = thin(grid)
+// The lap is the ring of road that separates the infield from the outside world.
+// Non-road cells reachable from the raster border are the outside; the largest
+// enclosed non-road region is the infield; road cells equidistant from both form
+// a band around the lap. Paddocks, car parks and access roads hang off the
+// outside and never separate it from the infield, so they drop out here without
+// any cycle search (which explodes on the internal loops of a paddock).
+const lapBand = () => {
+  const N = GW * GH
+  const label = new Int32Array(N).fill(-1)
+  const q = new Int32Array(N)
+  const fill = (seeds, id) => { let h = 0, t = 0; for (const c of seeds) { if (label[c] !== -1) continue; label[c] = id; q[t++] = c }; let count = 0; while (h < t) { const c = q[h++]; count++; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === -1 && !grid[n]) { label[n] = id; q[t++] = n } } } return count }
+  const border = []
+  for (let x = 0; x < GW; x++) { if (!grid[x]) border.push(x); if (!grid[(GH - 1) * GW + x]) border.push((GH - 1) * GW + x) }
+  for (let z = 0; z < GH; z++) { if (!grid[z * GW]) border.push(z * GW); if (!grid[z * GW + GW - 1]) border.push(z * GW + GW - 1) }
+  fill(border, 1)
+  let best = -1, bestCount = 0, next = 2
+  for (let i = 0; i < N; i++) { if (grid[i] || label[i] !== -1) continue; const count = fill([i], next); if (count > bestCount) { bestCount = count; best = next } next++ }
+  if (process.env.DEBUG_BAND && (best < 0 || bestCount * RES * RES < 5000)) { const pts = []; for (let i = 0; i < N; i++) if (grid[i]) pts.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-band.json`), JSON.stringify({ band: pts, infield: [], res: RES })) }
+  if (best < 0 || bestCount * RES * RES < 5000) {
+    // Where does the outside get in? Walk from the deepest outside cell back to the border
+    // along the flood's distance field and report the tightest squeeze between road cells.
+    const dB = new Int32Array(N).fill(-1); let h = 0, t = 0
+    for (const c of border) if (label[c] === 1 && dB[c] < 0) { dB[c] = 0; q[t++] = c }
+    while (h < t) { const c = q[h++]; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === 1 && dB[n] < 0) { dB[n] = dB[c] + 1; q[t++] = n } } }
+    let deep = -1, deepD = -1; for (let i = 0; i < N; i++) if (dB[i] > deepD) { deepD = dB[i]; deep = i }
+    const roadDist = (c) => { const x = c % GW, z = (c - x) / GW; for (let r = 1; r <= 12; r++) { for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && grid[Z * GW + X]) return r } } return 13 }
+    let cur = deep, tight = null, tightD = 99
+    const trail = []
+    for (let guard = 0; guard < N && cur >= 0 && dB[cur] > 0; guard++) { const rd = roadDist(cur); if (guard % 50 === 0) trail.push(`(${(gx0 + (cur % GW) * RES).toFixed(0)},${(gz0 + Math.floor(cur / GW) * RES).toFixed(0)}):${rd}`); if (rd < tightD && guard > 5) { tightD = rd; tight = cur } const x = cur % GW, z = (cur - x) / GW; let nxt = -1; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === 1 && dB[n] >= 0 && dB[n] < dB[cur]) { nxt = n; break } } cur = nxt }
+    // Decisive locator: widen the core until an infield appears; the cells that only
+    // exist in the widened core and separate that infield from the outside plug the gap.
+    for (const K of [2, 4, 6, 9, 13, 18]) {
+      const gK = dilate(grid, Math.max(1, Math.round(K / RES)))
+      const labK = new Int32Array(N).fill(-1)
+      const fillK = (seeds, id) => { let h2 = 0, t2 = 0; for (const c of seeds) { if (labK[c] !== -1 || gK[c]) continue; labK[c] = id; q[t2++] = c }; let count = 0; while (h2 < t2) { const c = q[h2++]; count++; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (labK[n] === -1 && !gK[n]) { labK[n] = id; q[t2++] = n } } } return count }
+      fillK(border, 1)
+      let bestK = -1, bestKCount = 0, nextK = 2
+      for (let i = 0; i < N; i++) { if (gK[i] || labK[i] !== -1) continue; const count = fillK([i], nextK); if (count > bestKCount) { bestKCount = count; bestK = nextK } nextK++ }
+      if (bestK < 0 || bestKCount * RES * RES < 20000) continue
+      // Distance (in cells, through anything) from the infield and from the outside, capped.
+      const near = (id, cap) => { const d = new Int32Array(N).fill(-1); let h2 = 0, t2 = 0; for (let i = 0; i < N; i++) if (labK[i] === id) { d[i] = 0; q[t2++] = i } while (h2 < t2) { const c = q[h2++]; if (d[c] >= cap) continue; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (d[n] < 0) { d[n] = d[c] + 1; q[t2++] = n } } } return d }
+      const cap = Math.round(K / RES) + 3
+      const dInf = near(bestK, cap), dOutK = near(1, cap)
+      let sx = 0, sz = 0, sn = 0
+      const samples = []
+      for (let i = 0; i < N; i++) { if (!gK[i] || grid[i] || dInf[i] < 0 || dOutK[i] < 0) continue; const x = i % GW, z = (i - x) / GW; sx += x; sz += z; sn++; if (samples.length < 4 && sn % 40 === 1) samples.push(`(${(gx0 + x * RES).toFixed(0)},${(gz0 + z * RES).toFixed(0)})`) }
+      console.log(`ring gap: widening the core by ${K} m encloses an infield of ${Math.round(bestKCount * RES * RES)} m²; the plug (${sn} cells) centres on (${(gx0 + (sx / Math.max(1, sn)) * RES).toFixed(0)}, ${(gz0 + (sz / Math.max(1, sn)) * RES).toFixed(0)}); samples ${samples.join(' ')}`)
+      break
+    }
+    // Crossing a broken ring means road on two opposite sides of the trail cell.
+    const along = (c, dx, dz) => { let x = c % GW, z = (c - x) / GW; for (let r = 1; r <= 20; r++) { x += dx; z += dz; if (x < 0 || z < 0 || x >= GW || z >= GH) return 21; if (grid[z * GW + x]) return r } return 21 }
+    const spots = []
+    cur = deep
+    for (let guard = 0; guard < N && cur >= 0 && dB[cur] > 0; guard++) { const sc = Math.min(Math.max(along(cur, 1, 0), along(cur, -1, 0)), Math.max(along(cur, 0, 1), along(cur, 0, -1)), Math.max(along(cur, 1, 1), along(cur, -1, -1)), Math.max(along(cur, 1, -1), along(cur, -1, 1))); if (sc <= 15) spots.push([sc, cur]); const x = cur % GW, z = (cur - x) / GW; let nxt = -1; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === 1 && dB[n] >= 0 && dB[n] < dB[cur]) { nxt = n; break } } cur = nxt }
+    spots.sort((a, b) => a[0] - b[0])
+    const seen = []
+    for (const [sc, c] of spots) { const wx = gx0 + (c % GW) * RES, wz = gz0 + Math.floor(c / GW) * RES; if (seen.some(([x, z]) => Math.hypot(x - wx, z - wz) < 40)) continue; seen.push([wx, wz, sc]); if (seen.length >= 5) break }
+    console.log(`gap candidates (road on both sides within N m): ${seen.map(([x, z, sc]) => `(${x.toFixed(0)}, ${z.toFixed(0)}) ${sc * RES} m`).join('; ')}`)
+    if (tight !== null) console.log(`leak: the outside squeezes past the road at (${(gx0 + (tight % GW) * RES).toFixed(0)}, ${(gz0 + Math.floor(tight / GW) * RES).toFixed(0)}) — road within ${tightD * RES} m there; deepest interior cell (${(gx0 + (deep % GW) * RES).toFixed(0)}, ${(gz0 + Math.floor(deep / GW) * RES).toFixed(0)}) is ${deepD * RES} m from the border; trail every 50 m (pos:road-distance) ${trail.slice(0, 60).join(' ')}`)
+    console.log(`no infield: ${next - 2} enclosed regions, largest ${Math.round(bestCount * RES * RES)} m² — the core raster does not close around one (the outside leaks in through a gap); falling back to the skeleton`); return null }
+  const dist = (ids) => { const d = new Int32Array(N).fill(-1); let h = 0, t = 0; for (let i = 0; i < N; i++) { if (!grid[i]) continue; const x = i % GW, z = (i - x) / GW; let touch = false; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && ids.has(label[Z * GW + X])) touch = true } if (touch) { d[i] = 0; q[t++] = i } } while (h < t) { const c = q[h++]; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (grid[n] && d[n] < 0) { d[n] = d[c] + 1; q[t++] = n } } } return d }
+  // Every other enclosed pocket (a strip between groove and kerb, a run-off ringed
+  // by kerbs) joins whichever side its neighbouring road cells are nearer to;
+  // left alone it would block the distance field and cut the band.
+  const inside = new Set([best]), outside = new Set([1])
+  const d1In = dist(inside), d1Out = dist(outside)
+  const votes = new Map()
+  for (let i = 0; i < N; i++) { if (!grid[i]) continue; const x = i % GW, z = (i - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const r = label[Z * GW + X]; if (r < 2 || r === best) continue; const v = votes.get(r) ?? [0, 0]; if (d1In[i] >= 0 && (d1Out[i] < 0 || d1In[i] < d1Out[i])) v[0]++; else if (d1Out[i] >= 0) v[1]++; votes.set(r, v) } }
+  for (const [r, [vin, vout]] of votes) (vin >= vout ? inside : outside).add(r)
+  const dIn = dist(inside), dOut = dist(outside)
+  const band = new Uint8Array(N)
+  let cells = 0
+  for (let i = 0; i < N; i++) if (grid[i] && dIn[i] >= 0 && dOut[i] >= 0 && Math.abs(dIn[i] - dOut[i]) <= 1) { band[i] = 1; cells++ }
+  console.log(`infield ${Math.round(bestCount * RES * RES)} m² (${next - 2} enclosed regions); lap band ${cells} cells`)
+  if (process.env.DEBUG_BAND) { const pts = []; for (let i = 0; i < N; i++) if (band[i]) pts.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); const inf = []; for (let i = 0; i < N; i += 3) if (label[i] === best) inf.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-band.json`), JSON.stringify({ band: pts, infield: inf, res: RES })) }
+  return cells ? morph(band, (cnt) => cnt > 0) : null
+}
+// `tracer: 'skeleton'` keeps the whole-raster skeleton + largest cycle for layouts
+// where the band is not the lap (Drift Park is a wide pad with an island).
+const band = cfg.tracer === 'skeleton' ? null : lapBand()
+let skel = thin(band ?? grid)
 const nb8 = (g, x, z) => { const out = []; for (const [dx, dz] of [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]) if (at(g, x + dx, z + dz)) out.push([x + dx, z + dz]); return out }
 let pruned = 0
 for (let round = 0; round < 80; round++) {

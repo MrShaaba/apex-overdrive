@@ -58,9 +58,14 @@ Integration points:
 * **Circuits** — `node tools/asset-pipeline/prepare-track.mjs <track-id>` turns a raw circuit model into
   `public/assets/models/tracks/<id>.glb` with one node per class — `road`, `kerb`, `pit`,
   `runoff`, `gravel`, `terrain`, `wall`, `overlay`, `prop` (each also as `<class>_noshadow`) —
-  and derives the lap centreline from the road (+ kerb) mesh alone: the asphalt is rasterised
-  at 1–2 m, thinned to a skeleton, stripped of dead ends, turned into a junction graph and the
-  simple cycle enclosing the largest area is the lap. The loop is oriented to the circuit's real
+  and derives the lap centreline from the lap surface: the core road (+ kerbs) is rasterised at
+  1–2 m (`res` overrides; `coreRadius` admits general asphalt near the core rules when the track
+  shares its material with paddocks and car parks), the non-road cells reachable from the raster
+  border are the outside, the largest enclosed region is the infield (smaller pockets join
+  whichever side their neighbours are nearer to), and the road cells equidistant from both form
+  the lap band — paddocks, pit lanes and access roads never separate infield from outside, so
+  they drop out without any cycle search. The band is thinned and its few junctions resolved by
+  the largest-area cycle. The loop is oriented to the circuit's real
   direction, started at the model's start marker (`startMarker`, e.g. the start lights) and the
   pit zone is the stretch beside the pit asphalt nearest the start (Spa also carries its old
   Eau Rouge pits). Control points and the pit feature go to `src/game/tracks/data/<id>.points.json`

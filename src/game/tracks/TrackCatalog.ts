@@ -12,6 +12,7 @@
 import type { SurfaceType } from '../physics/Surfaces'
 import driftPoints from './data/drift.points.json'
 import spaPoints from './data/spa.points.json'
+import bugattiPoints from './data/bugatti.points.json'
 
 export type TrackTheme = 'island' | 'alpine' | 'badlands' | 'woodland' | 'metro' | 'glacier' | 'shipyard' | 'neon' | 'lakeside'
 export type WeatherKind = 'clear' | 'cloudy' | 'overcast' | 'rain' | 'storm' | 'fog' | 'snow' | 'blizzard'
@@ -414,6 +415,29 @@ export const TRACK_CATALOG: TrackDefinition[] = [
     halfWidths: spaPoints.halfWidths,
     features: [
       ...(spaPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
+      { type: 'sector', at: 0.33 },
+      { type: 'sector', at: 0.66 },
+    ],
+  },
+  {
+    id: 'bugatti',
+    name: 'Circuit Bugatti',
+    location: 'Le Mans, France',
+    description: 'The permanent circuit inside the 24 Hours track: the Dunlop curve and chicane, the S de la Forêt, Museum, Garage Vert and the Chemin aux Boeufs esses before the run back past the pits. Short, technical and flat out at the end.',
+    theme: 'woodland',
+    model: { file: 'assets/models/tracks/bugatti.glb', credit: '"Bugatti Circuit 2017 layout" by Dave Love SketchFab, CC-BY 4.0' },
+    closed: true,
+    width: 12,
+    difficulty: 3,
+    unlockLevel: 1,
+    defaultLaps: 4,
+    lengthKm: +(bugattiPoints.lapMetres / 1000).toFixed(2),
+    bestLapReference: 92,
+    environment: env({ terrain: 'valley', terrainAmplitude: 0, defaultHour: 15, skyTint: '#a8cdf0', groundColor: '#55803c', treeDensity: 0, buildingDensity: 0, fogDensity: 0.0008, weatherOptions: ['clear', 'cloudy', 'overcast', 'rain'] }),
+    points: bugattiPoints.points as [number, number, number][],
+    halfWidths: bugattiPoints.halfWidths,
+    features: [
+      ...(bugattiPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
       { type: 'sector', at: 0.33 },
       { type: 'sector', at: 0.66 },
     ],
