@@ -59,6 +59,8 @@ export interface BuiltTrack {
   spline: TrackSpline
   root: THREE.Group
   halfWidth: number
+  /** Usable half-width at a spline sample index: per-point data for model circuits, `halfWidth` otherwise. */
+  halfWidthAt: (sampleIndex: number) => number
   startGrid: GridSlot[]
   checkpoints: Checkpoint[]
   sectorDistances: number[]
@@ -161,14 +163,50 @@ function emptyProps(): PropsResult {
   return { root: new THREE.Group(), crowdZones: [], lampPositions: [], updateVisibility() {}, setNight() {}, dispose() {} }
 }
 
-function addTrimeshCollider(physics: PhysicsWorld, geometry: THREE.BufferGeometry, surface: SurfaceType, groups = GROUND_GROUPS, wall = false): void {
+/**
+ * Static trimesh collider, split into spatial chunks. A circuit model's road,
+ * walls or terrain is one mesh spanning the whole lap; as a single collider its
+ * bounding box covers the circuit, so every wheel ray and chassis pair test
+ * from every car traverses every such mesh. Chunked, the broadphase only hands
+ * a car the few pieces around it — the difference between 15 and 90 fps with
+ * an eight-car field on a 7 km track.
+ */
+function addTrimeshCollider(physics: PhysicsWorld, geometry: THREE.BufferGeometry, surface: SurfaceType, groups = GROUND_GROUPS, wall = false, chunk = 100): void {
   const pos = geometry.attributes.position.array as Float32Array
   const idx = geometry.index ? new Uint32Array(geometry.index.array) : undefined
   if (!idx) return
   const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed())
-  const desc = physics.RAPIER.ColliderDesc.trimesh(new Float32Array(pos), idx).setFriction(0.9).setCollisionGroups(groups)
-  const col = physics.world.createCollider(desc, body)
-  physics.registerCollider(col, { surface, wall })
+  const cells = new Map<number, number[]>()
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3
+    const cx = Math.floor((pos[a] + pos[b] + pos[c]) / 3 / chunk)
+    const cz = Math.floor((pos[a + 2] + pos[b + 2] + pos[c + 2]) / 3 / chunk)
+    const key = (cx + 32768) * 65536 + (cz + 32768)
+    let list = cells.get(key)
+    if (!list) cells.set(key, (list = []))
+    list.push(t)
+  }
+  for (const tris of cells.values()) {
+    const remap = new Map<number, number>()
+    const verts: number[] = []
+    const local = new Uint32Array(tris.length * 3)
+    let k = 0
+    for (const t of tris) {
+      for (let e = 0; e < 3; e++) {
+        const v = idx[t + e]
+        let m = remap.get(v)
+        if (m === undefined) {
+          m = verts.length / 3
+          remap.set(v, m)
+          verts.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2])
+        }
+        local[k++] = m
+      }
+    }
+    const desc = physics.RAPIER.ColliderDesc.trimesh(new Float32Array(verts), local).setFriction(0.9).setCollisionGroups(groups)
+    const col = physics.world.createCollider(desc, body)
+    physics.registerCollider(col, { surface, wall })
+  }
 }
 
 export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, textures: TextureFactory, quality: ResolvedQuality): Promise<BuiltTrack> {
@@ -179,6 +217,12 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   const points = def.points.map(([x, y, z]) => new THREE.Vector3(x, y, z))
   const spline = new TrackSpline(points, def.closed, 2)
   const halfWidth = def.width / 2
+  const halfWidthAt = (() => {
+    const hw = def.halfWidths
+    if (!hw || !hw.length) return () => halfWidth
+    // Control points and spline samples are both uniform in arc length, so the index maps proportionally.
+    return (i: number) => hw[Math.min(hw.length - 1, Math.round((spline.wrapIndex(i) / spline.count) * hw.length))]
+  })()
   const disposables: (THREE.BufferGeometry | THREE.Material)[] = []
   const bounds = spline.bounds()
   const seed = hashString(def.id)
@@ -302,19 +346,32 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
           roadMat = mats[0]
           modelRoadRoughness = roadMat.roughness
         }
+        if (name.startsWith('overlay')) for (const m of mats) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2 }
         if (surface) addTrimeshCollider(physics, o.geometry, surface, wall ? WALL_GROUPS : GROUND_GROUPS, wall)
       })
     }
-    mount('road', 'asphalt', false, false)
-    mount('terrain', 'grass', false, false)
-    mount('wall', 'concrete', true, true)
-    mount('prop', null, false, true)
-    // A wide grass apron under and beyond the model's terrain plane so a car
-    // that runs off the map never falls through the world.
+    // Node classes baked by prepare-track.mjs (each may also come as <class>_noshadow).
+    const classes: [string, SurfaceType | null, boolean, boolean][] = [
+      ['road', 'asphalt', false, false],
+      ['kerb', 'curb', false, false],
+      ['pit', 'asphalt', false, false],
+      ['runoff', 'concrete', false, false],
+      ['gravel', 'gravel', false, false],
+      ['terrain', 'grass', false, false],
+      ['wall', 'concrete', true, true],
+      ['overlay', null, false, false],
+      ['prop', null, false, true],
+    ]
+    for (const [name, surface, wall, cast] of classes) {
+      mount(name, surface, wall, cast)
+      mount(`${name}_noshadow`, surface, wall, false)
+    }
+    // A wide grass apron under and beyond the model's terrain so a car that
+    // runs off the map never falls through the world.
     const centre = bounds.getCenter(new THREE.Vector3())
-    const apronGeo = new THREE.PlaneGeometry(6000, 6000, 1, 1)
+    const apronGeo = new THREE.PlaneGeometry(8000, 8000, 1, 1)
     apronGeo.rotateX(-Math.PI / 2)
-    apronGeo.translate(centre.x, -0.08, centre.z)
+    apronGeo.translate(centre.x, bounds.min.y - 1.5, centre.z)
     const apronTex = textures.ground('grass', env.groundColor)
     apronTex.repeat.set(400, 400)
     const apronMat = new THREE.MeshStandardMaterial({ map: apronTex, roughness: 0.98 })
@@ -323,6 +380,92 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     root.add(apron)
     addTrimeshCollider(physics, apronGeo, 'grass')
     disposables.push(apronGeo, apronMat)
+
+    // Smoothing net: an invisible asphalt collider 5 mm *above* the asphalt as
+    // the physics actually sees it. Circuit models are rough in ways a car at
+    // 250 km/h cannot take: racing-groove decals 3–8 cm above the base asphalt,
+    // drain strips and painted patches a few centimetres low, seams and missing
+    // slivers — and a formula car under downforce runs its floor on the road, so
+    // every edge catches. Sampled at every spline sample and every metre across
+    // and interpolated, the net is the one continuous sheet the wheels and floor
+    // meet on asphalt; steps become ramps, gaps get covered. Columns over kerbs,
+    // grass or gravel take their nearest asphalt neighbour's height but sit 5 mm
+    // *below* their own surface, so kerbs still bite and a lower verge stays grass.
+    {
+      const R = physics.RAPIER
+      // Colliders created since the last step are invisible to ray queries until
+      // the query pipeline is refreshed.
+      physics.world.updateSceneQueries()
+      const rayGroups = makeGroups(CollisionGroup.VEHICLE, CollisionGroup.GROUND)
+      const lats: number[] = []
+      for (let l = -8; l <= 8; l++) lats.push(l)
+      const rows = spline.samples.length
+      const cols = lats.length
+      const heights = new Float32Array(rows * cols)
+      const onAsphalt = new Uint8Array(rows * cols)
+      const ownTop = new Float32Array(cols)
+      const ownSurface: (SurfaceType | null)[] = new Array(cols).fill(null)
+      const hits: { y: number; surface: SurfaceType }[] = []
+      for (let i = 0; i < rows; i++) {
+        const s = spline.samples[i]
+        for (let j = 0; j < cols; j++) {
+          const x = s.position.x + s.right.x * lats[j]
+          const z = s.position.z + s.right.z * lats[j]
+          const top = s.position.y + 30
+          hits.length = 0
+          physics.world.intersectionsWithRay(new R.Ray({ x, y: top, z }, { x: 0, y: -1, z: 0 }), 60, true, (h) => {
+            const meta = physics.getMeta(h.collider.handle)
+            const y = top - h.timeOfImpact
+            if (meta?.surface && !meta.wall && Math.abs(y - s.position.y) < 6) hits.push({ y, surface: meta.surface })
+            return true
+          }, undefined, rayGroups)
+          hits.sort((a, b) => b.y - a.y)
+          ownTop[j] = hits.length ? hits[0].y : NaN
+          ownSurface[j] = hits.length ? hits[0].surface : null
+          heights[i * cols + j] = hits.length && hits[0].surface === 'asphalt' ? hits[0].y : NaN
+          onAsphalt[i * cols + j] = hits.length && hits[0].surface === 'asphalt' ? 1 : 0
+        }
+        for (let j = 0; j < cols; j++) {
+          if (Number.isFinite(heights[i * cols + j])) continue
+          let ref = NaN
+          for (let k = 1; k < cols && !Number.isFinite(ref); k++) {
+            const l = heights[i * cols + j - k], r = heights[i * cols + j + k]
+            if (j - k >= 0 && Number.isFinite(l)) ref = l
+            else if (j + k < cols && Number.isFinite(r)) ref = r
+          }
+          if (!Number.isFinite(ref)) ref = s.position.y
+          const own = ownTop[j], surface = ownSurface[j]
+          if (!Number.isFinite(own)) heights[i * cols + j] = ref // a gap: cover it
+          else if ((surface === 'concrete' || surface === 'curb') && own > ref - 0.1) heights[i * cols + j] = ref // paint, drain covers, kerb feet: road
+          else heights[i * cols + j] = Math.min(ref, own) // verges, gravel, deep drops: stay below them
+        }
+      }
+      const verts = new Float32Array(rows * cols * 3)
+      for (let i = 0; i < rows; i++) {
+        const s = spline.samples[i]
+        for (let j = 0; j < cols; j++) {
+          const o = (i * cols + j) * 3
+          verts[o] = s.position.x + s.right.x * lats[j]
+          verts[o + 1] = heights[i * cols + j] + (onAsphalt[i * cols + j] ? 0.005 : -0.005)
+          verts[o + 2] = s.position.z + s.right.z * lats[j]
+        }
+      }
+      const rowCount = def.closed ? rows : rows - 1
+      const index = new Uint32Array(rowCount * (cols - 1) * 6)
+      let k = 0
+      for (let i = 0; i < rowCount; i++) {
+        const a = i * cols, b = ((i + 1) % rows) * cols
+        for (let j = 0; j < cols - 1; j++) {
+          index[k++] = a + j; index[k++] = b + j; index[k++] = a + j + 1
+          index[k++] = a + j + 1; index[k++] = b + j; index[k++] = b + j + 1
+        }
+      }
+      const netGeo = new THREE.BufferGeometry()
+      netGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3))
+      netGeo.setIndex(new THREE.BufferAttribute(index, 1))
+      addTrimeshCollider(physics, netGeo, 'asphalt')
+      netGeo.dispose()
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -747,6 +890,11 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   for (const p of pits) {
     const from = Math.floor(p.from * spline.count)
     const to = Math.floor(p.to * spline.count)
+    if (useModel) {
+      // The model brings its own pit asphalt and garages; only the zone is needed.
+      pitZone = { from: spline.sampleAt(from).distance, to: spline.sampleAt(to).distance, side: p.side }
+      continue
+    }
     const off = halfWidth + 5.5
     const geo = buildRibbon(spline, { halfWidthAt: () => 4, offsetAt: () => p.side * off, lift: 0.03, from, to })
     const mat = new THREE.MeshStandardMaterial({ map: textures.ground('concrete', '#7c7f85'), roughness: 0.9 })
@@ -835,8 +983,8 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     physics.addStaticBox({ x: halfWidth * 0.6, y: rampH / 2, z: rampLen / 2 }, { x: m.position.x, y: m.position.y, z: m.position.z }, { x: q.x, y: q.y, z: q.z, w: q.w }, { surface: 'asphalt' }, 0.9)
   }
 
-  // Start / finish gantry.
-  {
+  // Start / finish gantry (circuit models carry their own start lights and line).
+  if (!useModel) {
     const s = spline.atDistance(0)
     const yaw = Math.atan2(s.tangent.x, s.tangent.z)
     const gMat = new THREE.MeshStandardMaterial({ color: 0xe8eaf0, roughness: 0.5, metalness: 0.3 })
@@ -924,6 +1072,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     spline,
     root,
     halfWidth,
+    halfWidthAt,
     startGrid,
     checkpoints,
     sectorDistances,

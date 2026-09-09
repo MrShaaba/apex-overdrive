@@ -362,7 +362,7 @@ export class Engine {
       this.cameraRig.tracksideCameras = this.track.tracksideCameras
       gameStore.set({ loading: { progress: 0.55, label: 'Computing racing line' } })
       await new Promise((r) => setTimeout(r, 16))
-      this.racingLine = new RacingLine(this.track.spline, this.track.halfWidth, 2.6, this.quality.propDensity >= 1 ? 140 : 90)
+      this.racingLine = new RacingLine(this.track.spline, this.track.halfWidthAt, 2.6, this.quality.propDensity >= 1 ? 140 : 90)
 
       // Environment.
       const env = def.environment

@@ -11,6 +11,7 @@
 
 import type { SurfaceType } from '../physics/Surfaces'
 import driftPoints from './data/drift.points.json'
+import spaPoints from './data/spa.points.json'
 
 export type TrackTheme = 'island' | 'alpine' | 'badlands' | 'woodland' | 'metro' | 'glacier' | 'shipyard' | 'neon' | 'lakeside'
 export type WeatherKind = 'clear' | 'cloudy' | 'overcast' | 'rain' | 'storm' | 'fog' | 'snow' | 'blizzard'
@@ -61,6 +62,8 @@ export interface TrackDefinition {
   /** When set, the circuit's geometry comes from this file; `points` is its derived centreline. */
   model?: TrackModelRef
   points: [number, number, number][]
+  /** Usable half-width at each control point (model circuits); `width / 2` when absent. */
+  halfWidths?: number[]
   closed: boolean
   width: number
   difficulty: 1 | 2 | 3 | 4 | 5
@@ -388,6 +391,29 @@ export const TRACK_CATALOG: TrackDefinition[] = [
     points: driftPoints.points as [number, number, number][],
     features: [
       { type: 'pit', from: 0.13, to: 0.2, side: 1 },
+      { type: 'sector', at: 0.33 },
+      { type: 'sector', at: 0.66 },
+    ],
+  },
+  {
+    id: 'spa',
+    name: 'Spa-Francorchamps',
+    location: 'Stavelot, Belgium',
+    description: 'Seven kilometres through the Ardennes: the plunge into Eau Rouge and the climb up Raidillon, the long Kemmel straight, Pouhon, Blanchimont and the Bus Stop. The circuit every driver wants to master.',
+    theme: 'woodland',
+    model: { file: 'assets/models/tracks/spa.glb', credit: '"Circuit de Spa-Francorchamps 2022 layout" by Dave Love SketchFab, CC-BY 4.0' },
+    closed: true,
+    width: 13,
+    difficulty: 5,
+    unlockLevel: 1,
+    defaultLaps: 3,
+    lengthKm: +(spaPoints.lapMetres / 1000).toFixed(2),
+    bestLapReference: 106,
+    environment: env({ terrain: 'valley', terrainAmplitude: 0, defaultHour: 14, skyTint: '#9fc8f5', groundColor: '#4d7a3a', treeDensity: 0, buildingDensity: 0, fogDensity: 0.0009, weatherOptions: ['clear', 'cloudy', 'overcast', 'rain', 'fog'] }),
+    points: spaPoints.points as [number, number, number][],
+    halfWidths: spaPoints.halfWidths,
+    features: [
+      ...(spaPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
       { type: 'sector', at: 0.33 },
       { type: 'sector', at: 0.66 },
     ],

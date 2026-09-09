@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-08T17:56:38.362Z",
+  "generatedAt": "2026-09-09T01:22:23.151Z",
   "assets": [
     {
       "id": "model.cars.challenger",
@@ -78,7 +78,13 @@
       "id": "model.tracks.drift",
       "type": "model",
       "file": "models/tracks/drift.glb",
-      "bytes": 15683656
+      "bytes": 15720164
+    },
+    {
+      "id": "model.tracks.spa",
+      "type": "model",
+      "file": "models/tracks/spa.glb",
+      "bytes": 37824116
     },
     {
       "id": "hdri.nqweba_dawn_2k",

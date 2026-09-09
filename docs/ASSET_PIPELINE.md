@@ -56,15 +56,36 @@ Integration points:
   keeps the model's lateral wheel offset so the single wheel renders on the centreline while the
   physics still runs four contact patches.
 * **Circuits** — `node tools/asset-pipeline/prepare-track.mjs <track-id>` turns a raw circuit model into
-  `public/assets/models/tracks/<id>.glb` with `road`, `terrain`, `wall` and `prop` nodes (walls
-  become trimesh wall colliders, road/terrain ground colliders, props are scenery) and derives
-  the lap centreline from the road mesh alone: the road is rasterised at 1 m, thinned to a
-  skeleton, stripped of dead ends, turned into a junction graph and the simple cycle enclosing
-  the largest area is the lap. Control points go to `src/game/tracks/data/<id>.points.json`
-  and a `TrackDefinition` with `model` uses them; `TrackBuilder` then skips its procedural
-  surfaces, terrain, barriers and props but keeps the spline, grid, checkpoints, pit lane, DRS
-  zones, gantry and minimap. `node tools/asset-pipeline/dump-gltf.mjs <scene.gltf>` prints a
-  model's node/material/bounds table when writing a config.
+  `public/assets/models/tracks/<id>.glb` with one node per class — `road`, `kerb`, `pit`,
+  `runoff`, `gravel`, `terrain`, `wall`, `overlay`, `prop` (each also as `<class>_noshadow`) —
+  and derives the lap centreline from the road (+ kerb) mesh alone: the asphalt is rasterised
+  at 1–2 m, thinned to a skeleton, stripped of dead ends, turned into a junction graph and the
+  simple cycle enclosing the largest area is the lap. The loop is oriented to the circuit's real
+  direction, started at the model's start marker (`startMarker`, e.g. the start lights) and the
+  pit zone is the stretch beside the pit asphalt nearest the start (Spa also carries its old
+  Eau Rouge pits). Control points and the pit feature go to `src/game/tracks/data/<id>.points.json`
+  and a `TrackDefinition` with `model` uses them; `TrackBuilder` gives road/kerb/pit/runoff/
+  gravel/terrain ground colliders with matching surfaces, walls trimesh wall colliders, overlays
+  a polygon offset and no collider, props scenery only, and adds a wide grass apron under the
+  map; it keeps the spline, grid, checkpoints, pit-lane logic, DRS zones and minimap and skips
+  its procedural surfaces, terrain, barriers, props and gantry. Rules can carry `lap: 'near'`
+  (general asphalt: drives like road and widens the line, but never traces it) and the traced
+  skeleton is re-centred across the full road width, stopping at wall cells, with the shift
+  median-filtered so junctions and jagged raster edges do not put wobbles in the line — a metre
+  of wobble reads as a corner to the AI's speed profile. The JSON also carries `halfWidths`
+  (usable half-width per control point) which `RacingLine` uses as its per-index lateral limit.
+  Heavy classes are decimated per primitive (the document-wide `simplify()` would eat the road)
+  and positions are Draco-quantised at 20 bits (14 bits is a 13 cm grid over a 2 km circuit:
+  a bumpy road and mismatched stacked surfaces). Circuit models have seams, drain strips and
+  missing slivers in their road surface, so `TrackBuilder` builds an invisible safety net
+  3 cm under the asphalt as the physics sees it (rays per spline sample, columns off the
+  asphalt capped at their own surface) — a wheel over a gap drops centimetres, not to the
+  apron. `--points-only` regenerates the centreline without rebuilding the .glb.
+  `dump-gltf.mjs <scene.gltf>` prints a model's node/material/bounds table, `matinfo.mjs`
+  lists materials with their base-colour texture, triangle count and extent, `texsheet.mjs`
+  renders a contact sheet of those textures (the only way to read ripped exports whose
+  material names are `11001Mtl_76`), and `map-track.mjs <scene.gltf> <out.png> --points <json>
+  label=regex…` draws material groups with the centreline and its direction.
 * **Scenery library** — `node tools/asset-pipeline/prepare-props.mjs city` groups a scene's objects by
   footprint overlap into props, drops ground sheets, classifies them by size (building, shop,
   railing, bollard, post, billboard), centres each on its footprint with its base at y = 0 and

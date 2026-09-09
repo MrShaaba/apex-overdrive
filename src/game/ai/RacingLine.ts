@@ -17,22 +17,30 @@ export class RacingLine {
   readonly positions: THREE.Vector3[] = []
   readonly curvature: Float32Array
   readonly referenceSpeed: Float32Array
+  /** Typical lateral limit (median over the lap); `limitAt` gives the local one. */
   readonly limit: number
+  private readonly limits: Float32Array
 
   constructor(
     readonly spline: TrackSpline,
-    halfWidth: number,
+    halfWidth: number | ((sampleIndex: number) => number),
     margin = 2.6,
     iterations = 140,
   ) {
     const n = spline.count
-    this.limit = Math.max(0.5, halfWidth - margin)
+    this.limits = new Float32Array(n)
+    for (let i = 0; i < n; i++) this.limits[i] = Math.max(0.5, (typeof halfWidth === 'number' ? halfWidth : halfWidth(i)) - margin)
+    const sorted = Float32Array.from(this.limits).sort()
+    this.limit = sorted[n >> 1]
     this.offsets = new Float32Array(n)
     this.curvature = new Float32Array(n)
     this.referenceSpeed = new Float32Array(n)
     this.optimise(iterations)
     this.computeCurvature()
-    this.computeReferenceSpeed(0.85 * 9.81, 0.8 * 9.81, 0.45 * 9.81, 95)
+    // 0.78 g lateral: AIDriver clamps steering to ~0.8 g of lateral acceleration, so a
+    // profile assuming more sends every car wide in every corner — harmless on a 16 m
+    // procedural road, a wall on a 10 m real one.
+    this.computeReferenceSpeed(0.78 * 9.81, 0.8 * 9.81, 0.45 * 9.81, 95)
   }
 
   private optimise(iterations: number): void {
@@ -50,7 +58,8 @@ export class RacingLine {
         tmp.copy(a).add(b).multiplyScalar(0.5)
         // Project the smoothed point back onto the cross-section at i and clamp.
         const s = spline.samples[i]
-        const lateral = THREE.MathUtils.clamp(tmp.sub(s.position).dot(s.right), -this.limit, this.limit)
+        const lim = this.limits[i]
+        const lateral = THREE.MathUtils.clamp(tmp.sub(s.position).dot(s.right), -lim, lim)
         this.offsets[i] = lateral
         pts[i].copy(s.position).addScaledVector(s.right, lateral)
       }
@@ -108,7 +117,12 @@ export class RacingLine {
   targetAt(index: number, bias: number, out: THREE.Vector3): THREE.Vector3 {
     const i = this.spline.wrapIndex(index)
     const s = this.spline.samples[i]
-    const lateral = THREE.MathUtils.clamp(this.offsets[i] + bias, -this.limit, this.limit)
+    const lateral = THREE.MathUtils.clamp(this.offsets[i] + bias, -this.limits[i], this.limits[i])
     return out.copy(s.position).addScaledVector(s.right, lateral)
+  }
+
+  /** Lateral limit (metres from the centreline) at a sample index. */
+  limitAt(index: number): number {
+    return this.limits[this.spline.wrapIndex(index)]
   }
 }

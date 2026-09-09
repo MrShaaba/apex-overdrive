@@ -317,7 +317,9 @@ export class AIDriver {
     // --- Speed control -------------------------------------------------------------------
     const aheadIndex = this.progressIndex + Math.round((10 + absSpeed * 0.9) / 2)
     let targetSpeed = Infinity
-    const lookSamples = Math.round((absSpeed * 2.4 + 20) / 2)
+    // Scan as far as the car needs to stop from this speed (plus a margin): a fixed
+    // multiple of speed left a 200 km/h run into a slow corner with no room to brake.
+    const lookSamples = Math.round(((absSpeed * absSpeed) / 11 + 30) / 2)
     for (let k = 0; k <= lookSamples; k += 2) {
       const idx = spline.wrapIndex(this.progressIndex + k)
       const dist = k * 2

@@ -212,7 +212,8 @@ export class RaceManager {
       // Pit lane.
       const pit = this.track.pitZone
       if (pit && this.phase === 'racing') {
-        const inRange = r.progress > pit.from && r.progress < pit.to
+        // A pit zone with from > to wraps the start line (real circuits put the pits either side of it).
+        const inRange = pit.from <= pit.to ? r.progress > pit.from && r.progress < pit.to : r.progress > pit.from || r.progress < pit.to
         const inLane = Math.sign(p.lateral) === pit.side && Math.abs(p.lateral) > this.track.halfWidth + 1.5 && Math.abs(p.lateral) < this.track.halfWidth + 12
         // Lane membership alone (no speed gate) — the engine hangs the
         // automatic 60 mph limiter off this, released once past the exit line.
