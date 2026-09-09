@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-09T06:20:55.825Z",
+  "generatedAt": "2026-09-09T06:57:13.271Z",
   "assets": [
     {
       "id": "model.cars.challenger",
@@ -93,16 +93,40 @@
       "bytes": 35728584
     },
     {
+      "id": "model.tracks.indianapolis",
+      "type": "model",
+      "file": "models/tracks/indianapolis.glb",
+      "bytes": 11868284
+    },
+    {
+      "id": "model.tracks.marina",
+      "type": "model",
+      "file": "models/tracks/marina.glb",
+      "bytes": 9923656
+    },
+    {
       "id": "model.tracks.sepang",
       "type": "model",
       "file": "models/tracks/sepang.glb",
       "bytes": 8362368
     },
     {
+      "id": "model.tracks.shanghai",
+      "type": "model",
+      "file": "models/tracks/shanghai.glb",
+      "bytes": 12171252
+    },
+    {
       "id": "model.tracks.spa",
       "type": "model",
       "file": "models/tracks/spa.glb",
       "bytes": 37824116
+    },
+    {
+      "id": "model.tracks.suzuka",
+      "type": "model",
+      "file": "models/tracks/suzuka.glb",
+      "bytes": 28851116
     },
     {
       "id": "hdri.nqweba_dawn_2k",

@@ -422,6 +422,13 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
             return true
           }, undefined, rayGroups)
           hits.sort((a, b) => b.y - a.y)
+          // A terrain sheet laid over the road inside the road's own width (Suzuka's first
+          // corner has grass 5–20 cm above the asphalt) is a modelling artefact, not a verge:
+          // the net rides on top of it as asphalt. Beyond the half-width a raised verge stays.
+          if (hits.length && hits[0].surface !== 'asphalt' && Math.abs(lats[j]) < halfWidthAt(i) - 0.5) {
+            const asphaltBelow = hits.find((h) => h.surface === 'asphalt')
+            if (asphaltBelow && hits[0].y - asphaltBelow.y < 0.3) hits[0] = { y: hits[0].y, surface: 'asphalt' }
+          }
           ownTop[j] = hits.length ? hits[0].y : NaN
           ownSurface[j] = hits.length ? hits[0].surface : null
           heights[i * cols + j] = hits.length && hits[0].surface === 'asphalt' ? hits[0].y : NaN
@@ -499,7 +506,9 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
           if (!Number.isFinite(ground)) holes++
           const o = (r * cols + j) * 3
           verts[o] = x
-          verts[o + 1] = (Number.isFinite(ground) ? ground : s.position.y) - 0.3
+          // Under the road the sheet stays well clear (the smoothing net owns that); beyond it
+          // sits 8 cm under the ground so the lip of a hole is a step a car can climb, not a trap.
+          verts[o + 1] = (Number.isFinite(ground) ? ground : s.position.y) - (Math.abs(lats[j]) <= 12 ? 0.3 : 0.08)
           verts[o + 2] = z
         }
       }

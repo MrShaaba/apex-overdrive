@@ -157,6 +157,7 @@ const TRACKS = {
     yawDeg: 0,
     direction: 'cw',
     controlSpacing: 10,
+    tracer: 'skeleton', // the short-circuit link road splits the infield; the largest cycle is the GP lap
     // A ripped export whose materials are all called advert_side_a_N: read off flatmats.mjs,
     // matmaps.mjs and the texture sheet.
     rules: [
@@ -167,9 +168,11 @@ const TRACKS = {
       { cls: 'gravel', material: /advert_side_a_81$|advert_side_a_80$/ },
       { cls: 'terrain', material: /advert_side_a_82$|advert_side_a_79$|advert_side_a_11$|advert_side_a_15$|advert_side_a_19$|advert_side_a_29$/ }, // grass, verges, lakes
       { cls: 'overlay', material: /advert_side_a_66$|advert_side_a_77$|advert_side_a_62$|advert_side_a_61$|advert_side_a_65$|advert_side_a_64$/ }, // edge shadows, lines, strips, decals
-      { cls: 'wall', material: /advert_side_a_9$|advert_side_a_48$|advert_side_a_44$|advert_side_a_17$|advert_side_a_37$|advert_side_a_50$|advert_side_a_68$|advert_side_a_88$|advert_side_a_96$|advert_side_a_76$|advert_side_a_56$|advert_side_a_58$|advert_side_a_16$/ }, // tyre stacks, fence posts, armco, concrete walls, pit wall, catch fencing, railings
+      { cls: 'wall', material: /advert_side_a_48$|advert_side_a_44$|advert_side_a_17$|advert_side_a_37$|advert_side_a_50$|advert_side_a_68$|advert_side_a_88$|advert_side_a_96$|advert_side_a_76$|advert_side_a_56$|advert_side_a_58$|advert_side_a_16$/ }, // tyre stacks, fence posts, armco, concrete walls, pit wall, catch fencing, railings
     ],
-    decimate: { wall: 0.15, prop: 0.5, terrain: 0.7 },
+    // The tyre stacks (_9) are 724k triangles of separate little shells that no simplifier
+    // can collapse; they stay scenery (the armco and fences behind them are the walls).
+    decimate: { wall: 0.3, prop: 0.35, terrain: 0.7 },
     noShadow: /advert_side_a_82$|advert_side_a_79$|advert_side_a_11$|advert_side_a_15$|advert_side_a_19$|advert_side_a_29$|advert_side_a_66$|advert_side_a_64$|advert_side_a_65$|advert_side_a_9$|advert_side_a_81$|advert_side_a_80$/,
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
@@ -183,12 +186,14 @@ const TRACKS = {
     direction: 'ccw',
     controlSpacing: 10,
     tracer: 'skeleton',
+    res: 1,
     // Street circuit: the track is one asphalt material threading a city of a hundred
     // building materials; barriers are concrete blocks with light rigs on top.
     rules: [
-      { cls: 'road', material: /^11001Mtl_15$/ }, // the track
+      { cls: 'road', material: /^11001Mtl_14$/ }, // the road surface (lane sheet; also the flyover deck)
+      { cls: 'road', material: /^11001Mtl_15$/, lap: 'near' }, // asphalt edge strips either side
       { cls: 'runoff', material: /^11001Mtl_96$/ }, // pavements and service asphalt beside the track
-      { cls: 'overlay', material: /^11001Mtl_92$|^11001Mtl_3$|^11001Mtl_14$/ }, // edge shadows, paving grid, road-marking sheets (also the flyover deck)
+      { cls: 'overlay', material: /^11001Mtl_92$|^11001Mtl_3$/ }, // edge shadows, paving grid
       { cls: 'terrain', material: /^11001Mtl$|^11001Mtl_94$|^11001Mtl_95$/ }, // sea, city ground, grass
       { cls: 'wall', material: /^11001Mtl_76$|^11001Mtl_18$|^11001Mtl_71$|^11001Mtl_72$|^11001Mtl_73$|^11001Mtl_93$|^11001Mtl_74$|^11001Mtl_75$/ }, // concrete barriers with light rigs, barrier blocks, catch fences, fence screens
     ],
@@ -206,10 +211,11 @@ const TRACKS = {
     direction: 'cw',
     controlSpacing: 10,
     tracer: 'skeleton',
+    res: 1,
+    coreClose: 3, // the pit-straight surface is stitched from strips that leave slits at 1 m
     crossings: [[-138, -164]], // the figure-eight overpass: pass straight through, twice
     rules: [
-      { cls: 'road', material: /^282_69$/ }, // the track (edge lines baked in)
-      { cls: 'road', material: /^282_66$/, lap: 'near' }, // pit exit / link roads
+      { cls: 'road', material: /^282_69$|^282_68$|^282_66$/ }, // the track (edge lines baked in), the pit-straight surface, and pieces shared with the East/West link roads
       { cls: 'pit', material: /^282_64$/ }, // pit lane with its bay markings
       { cls: 'kerb', material: /^282_10$/ },
       { cls: 'runoff', material: /^282_65$|^282_3$|^282_59$/ }, // paddock asphalt, pit apron, concrete run-off
@@ -230,16 +236,17 @@ const TRACKS = {
     yawDeg: 0,
     direction: 'ccw',
     controlSpacing: 10,
+    startMarker: /standard_20\.004_50$/, // the pit garages along the front straight
     // The oval is the lap; the infield road course stays drivable asphalt but is not traced
     // (the largest cycle is the oval anyway).
     rules: [
       { cls: 'road', material: /standard_20\.004_9$/ }, // the oval
       { cls: 'road', material: /standard_20\.004_16$|standard_20\.004_7$/, lap: 'near' }, // infield road course
-      { cls: 'pit', material: /standard_20\.004_10$/ }, // cracked concrete pit lane / apron
+      { cls: 'runoff', material: /standard_20\.004_10$/ }, // cracked concrete aprons
       { cls: 'gravel', material: /standard_20\.004_34$/ },
       { cls: 'terrain', material: /standard_20\.004_31$|standard_20\.004_90$|standard_20\.004_30$|standard_20\.004_13$/ }, // infield grass, surroundings, verge strips
       { cls: 'overlay', material: /standard_20\.004_8$|standard_20\.004_22$/ }, // edge lines, drains
-      { cls: 'wall', material: /standard_20\.004_89$|standard_20\.004_46$|standard_20\.004_37$|standard_20\.004_43$|standard_20\.004_67$|standard_20\.004_38$|standard_20\.004_39$/ }, // armco, SAFER walls, catch fences, tyre stacks
+      { cls: 'wall', material: /standard_20\.004_89$|standard_20\.004_46$|standard_20\.004_37$|standard_20\.004_43$|standard_20\.004_67$|standard_20\.004_38$/ }, // armco, SAFER walls, catch fences, tyre stacks (the chevron blocks at the road-course merges stay scenery: they reach onto the oval)
     ],
     decimate: { wall: 0.3, prop: 0.4, terrain: 0.5 },
     noShadow: /standard_20\.004_31$|standard_20\.004_90$|standard_20\.004_30$|standard_20\.004_13$|standard_20\.004_8$|standard_20\.004_22$|standard_20\.004_65$/,
@@ -308,6 +315,9 @@ if (!cfg) {
   process.exit(2)
 }
 const skipTextures = flags.includes('--skip-textures')
+// POINTS_OUT=path writes the centreline elsewhere (e.g. while the dev server is busy).
+const pointsOutPath = process.env.POINTS_OUT ?? cfg.pointsOut
+const outputPath = process.env.OUTPUT_GLB ?? cfg.output // OUTPUT_GLB=path builds elsewhere
 const pointsOnly = flags.includes('--points-only') // recompute the centreline data without touching the .glb
 const t0 = Date.now()
 
@@ -404,7 +414,7 @@ const heightGrid = new Float32Array(GW * GH).fill(NaN)
 for (const tri of coreTris) for (const [x, y, z] of tri) heightGrid[cellZ(z) * GW + cellX(x)] = y
 const roadHeightNear = (x, z) => { for (let r = 0; r <= 3; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && Number.isFinite(heightGrid[Z * GW + X])) return heightGrid[Z * GW + X] } return NaN }
 // Highest surface per cell (plane-interpolated), NaN where nothing covers the cell centre.
-const rasteriseTop = (tris) => {
+const rasteriseTop = (tris, lowest = false) => {
   const g = new Float32Array(GW * GH).fill(NaN)
   for (const tri of tris) {
     const [p0, p1, p2] = tri
@@ -426,7 +436,7 @@ const rasteriseTop = (tris) => {
         const bu = (wx * vz - wz * vx) / det, bv = (ux * wz - uz * wx) / det
         const y = p0[1] + bu * (p1[1] - p0[1]) + bv * (p2[1] - p0[1])
         const i = cz * GW + cx
-        if (!(g[i] >= y)) g[i] = y
+        if (lowest ? !(g[i] <= y) : !(g[i] >= y)) g[i] = y
       }
     }
   }
@@ -479,7 +489,7 @@ let roadTopGrid = null // highest road surface per cell, for the edge walks
 {
   const coverTris = trisOfPrims(prims.filter((p) => p.cls === 'terrain' || p.cls === 'gravel'))
   if (coverTris.length) {
-    const roadTop = rasteriseTop(roadTris), coverTop = rasteriseTop(coverTris)
+    const roadTop = rasteriseTop(roadTris), roadBottom = rasteriseTop(roadTris, true), coverTop = rasteriseTop(coverTris)
     roadTopGrid = roadTop
     let removed = 0
     if (process.env.DEBUG_WALK) {
@@ -488,7 +498,9 @@ let roadTopGrid = null // highest road surface per cell, for the edge walks
       const cx0 = cellX(qx), cz0 = cellZ(qz), R2 = Math.round(30 / RES)
       for (let cz = cz0 - R2; cz <= cz0 + R2; cz++) { let row = ''; for (let cx = cx0 - R2; cx <= cx0 + R2; cx++) { const i = cz * GW + cx; let ch = '.'; if (cx >= 0 && cz >= 0 && cx < GW && cz < GH && (grid[i] || fullGrid[i])) { ch = '#'; if (Number.isFinite(coverTop[i]) && Number.isFinite(roadTop[i])) { const d = Math.round((coverTop[i] - roadTop[i]) * 10); ch = d >= 0 ? String(Math.min(9, d)) : String.fromCharCode(96 + Math.min(26, -d)) } } row += ch } console.log('COVER ' + row) }
     }
-    for (let i = 0; i < grid.length; i++) if ((grid[i] || fullGrid[i]) && coverTop[i] >= roadTop[i] - 0.15) { if (grid[i]) removed++; grid[i] = 0; fullGrid[i] = 0 }
+    // Only a verge within 60 cm above the lowest road surface counts: an embankment beside a
+    // bridge, a roof or a hillside classed as terrain must not cut the road under it.
+    for (let i = 0; i < grid.length; i++) if ((grid[i] || fullGrid[i]) && coverTop[i] >= roadBottom[i] - 0.15 && coverTop[i] <= roadBottom[i] + 0.6) { if (grid[i]) removed++; grid[i] = 0; fullGrid[i] = 0 }
     console.log(`${removed} core cells under verges or gravel that sit on the asphalt — removed from the road`)
   }
 }
@@ -596,6 +608,14 @@ const lapBandOn = (g, allowPlug) => {
 }
 // `tracer: 'skeleton'` keeps the whole-raster skeleton + largest cycle for layouts
 // where the band is not the lap (Drift Park is a wide pad with an island).
+if (process.env.DEBUG_RASTER) {
+  // Connected components of the core raster: a lap that will not close is usually two pieces.
+  const lab = new Int32Array(GW * GH).fill(-1); const comps = []
+  for (let i = 0; i < GW * GH; i++) { if (!grid[i] || lab[i] >= 0) continue; const id = comps.length; const st = [i]; lab[i] = id; let n = 0, x0 = GW, x1 = 0, z0 = GH, z1 = 0; while (st.length) { const c = st.pop(); n++; const x = c % GW, z = (c - x) / GW; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const j = Z * GW + X; if (grid[j] && lab[j] < 0) { lab[j] = id; st.push(j) } } } comps.push({ n, x0, x1, z0, z1 }) }
+  comps.sort((a, b) => b.n - a.n)
+  console.log('core components: ' + comps.slice(0, 6).map((c) => `${c.n} cells x[${(gx0 + c.x0 * RES).toFixed(0)}..${(gx0 + c.x1 * RES).toFixed(0)}] z[${(gz0 + c.z0 * RES).toFixed(0)}..${(gz0 + c.z1 * RES).toFixed(0)}]`).join(' | '))
+}
+if (process.env.DEBUG_RASTER) { const cells = []; for (let i = 0; i < grid.length; i++) if (grid[i]) cells.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(process.env.DEBUG_RASTER, JSON.stringify({ line: [], skeleton: cells, road: roadTris.map((t) => t.map((v) => [+v[0].toFixed(1), +v[2].toFixed(1)])) })); console.log(`core raster ${cells.length} cells → ${process.env.DEBUG_RASTER}`) }
 const band = cfg.tracer === 'skeleton' ? null : lapBandOn(grid, true)
 let skel = thin(band ?? grid)
 const nb8 = (g, x, z) => { const out = []; for (const [dx, dz] of [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]) if (at(g, x + dx, z + dz)) out.push([x + dx, z + dz]); return out }
@@ -685,6 +705,7 @@ if (!junctions.length) {
   // close 3-way ones) and no simple cycle can pass it twice, so the largest cycle would be
   // a single lobe. Pair each arm with the arm opposite it and split the junction so the
   // loop goes straight through — a topology hint from the config, not a hand-authored line.
+  const crossingNodes = new Set()
   for (const [wx, wz] of cfg.crossings ?? []) {
     const near = new Set()
     junctions.forEach((jn, i) => { const c = jn.pixels.reduce((s, p) => [s[0] + p[0], s[1] + p[1]], [0, 0]).map((v) => v / jn.pixels.length); if (Math.hypot(gx0 + c[0] * RES - wx, gz0 + c[1] * RES - wz) < 25) near.add(i) })
@@ -702,6 +723,7 @@ if (!junctions.length) {
     const J2 = junctions.length
     junctions.push({ pixels: junctions[J].pixels })
     for (const k of pr[1]) { const { i, end } = ends[k]; edgesG[i][end] = J2 }
+    crossingNodes.add(J); crossingNodes.add(J2)
     console.log(`crossing ${wx},${wz}: junction split into two straight-through passes`)
   }
   const cycles = []
@@ -728,16 +750,20 @@ if (!junctions.length) {
     const first = edgesG[cycle[0]]
     let node = first.a
     if (cycle.length > 1) { const second = edgesG[cycle[1]]; node = second.a === first.b || second.b === first.b ? first.a : first.b }
-    const poly = []
-    for (const e of cycle) { const ed = edgesG[e]; const p = ed.a === node ? ed.path : [...ed.path].reverse(); poly.push(...p.slice(0, -1)); node = ed.a === node ? ed.b : ed.a }
+    const poly = [], cuts = []
+    for (const e of cycle) { const ed = edgesG[e]; if (crossingNodes.has(node)) cuts.push(poly.length); const p = ed.a === node ? ed.path : [...ed.path].reverse(); poly.push(...p.slice(0, -1)); node = ed.a === node ? ed.b : ed.a }
+    poly.cuts = cuts
     return poly
   }
+  // A figure-eight's lobes wind opposite ways and cancel in one shoelace sum: split the
+  // polygon where it passes the crossing and add the lobes' absolute areas instead.
+  const lobeArea = (poly) => { const c = poly.cuts ?? []; if (c.length !== 2) return area(poly); return area(poly.slice(c[0], c[1])) + area([...poly.slice(c[1]), ...poly.slice(0, c[0])]) }
   const dd = new Map()
   for (const c of cycles) dd.set([...c].sort((u, v) => u - v).join(','), c)
   // A figure-eight's lobes wind in opposite directions and cancel in the shoelace sum,
   // so with crossings configured the lap is the longest simple cycle instead.
   const plen = (poly) => { let l = 0; for (let i = 0; i < poly.length; i++) l += dist2(poly[i], poly[(i + 1) % poly.length]); return l }
-  const ranked = [...dd.values()].map((c) => toPoly(c)).map((poly) => ({ poly, area: area(poly), len: plen(poly) })).sort((u, v) => (cfg.crossings ? v.len - u.len : v.area - u.area))
+  const ranked = [...dd.values()].map((c) => toPoly(c)).map((poly) => ({ poly, area: lobeArea(poly), len: plen(poly) })).sort((u, v) => v.area - u.area)
   if (!ranked.length) throw new Error('the lap surface skeleton has no cycle — the road does not close')
   console.log(`skeleton ${skelCells} cells (${pruned} dead-end cells pruned), ${junctions.length} junctions, ${edgesG.length} edges, ${ranked.length} cycles; largest ${Math.round(ranked[0].area * RES * RES)} m², ${Math.round(ranked[0].len * RES)} m long`)
   cyclePaths = ranked.map((r) => r.poly)
@@ -942,9 +968,9 @@ if (flags.includes('--map')) {
 // --- rebuild hierarchy: one node per class -------------------------------------------------
 if (pointsOnly) {
   const features = pitFeature ? [pitFeature] : []
-  fs.mkdirSync(path.dirname(cfg.pointsOut), { recursive: true })
-  fs.writeFileSync(cfg.pointsOut, JSON.stringify({ generatedBy: 'tools/asset-pipeline/prepare-track.mjs', lapMetres: Math.round(length), features, points: control, ...(controlWidths ? { halfWidths: controlWidths } : {}) }) + '\n')
-  console.log(`lap ${length.toFixed(0)} m (${cfg.direction}), ${control.length} control points → ${cfg.pointsOut}; ${startNote}; elevation ${Math.min(...ys).toFixed(0)}..${Math.max(...ys).toFixed(0)} m`)
+  fs.mkdirSync(path.dirname(pointsOutPath), { recursive: true })
+  fs.writeFileSync(pointsOutPath, JSON.stringify({ generatedBy: 'tools/asset-pipeline/prepare-track.mjs', lapMetres: Math.round(length), features, points: control, ...(controlWidths ? { halfWidths: controlWidths } : {}) }) + '\n')
+  console.log(`lap ${length.toFixed(0)} m (${cfg.direction}), ${control.length} control points → ${pointsOutPath}; ${startNote}; elevation ${Math.min(...ys).toFixed(0)}..${Math.max(...ys).toFixed(0)} m`)
   if (pitFeature) console.log(`pit lane: t ${pitFeature.from}..${pitFeature.to} on side ${pitFeature.side > 0 ? 'right' : 'left'}`)
   process.exit(0)
 }
@@ -1039,15 +1065,15 @@ if (!skipTextures) {
   console.log(`  ${n} textures → ${(bytesTotal / 1048576).toFixed(1)} MB KTX2`)
 }
 await doc.transform(dedup(), prune({ keepLeaves: true }), weld(), draco({ method: 'edgebreaker', quantizePosition: 20, quantizeNormal: 10, quantizeTexcoord: 12 })) // 20 bits: ~2 mm over a 2 km circuit; 14 bits (13 cm) made the road bumpy and split stacked surfaces)
-fs.mkdirSync(path.dirname(cfg.output), { recursive: true })
-await io.write(cfg.output, doc)
+fs.mkdirSync(path.dirname(outputPath), { recursive: true })
+await io.write(outputPath, doc)
 
 // --- report + data -----------------------------------------------------------------
 const features = pitFeature ? [pitFeature] : []
-fs.mkdirSync(path.dirname(cfg.pointsOut), { recursive: true })
-fs.writeFileSync(cfg.pointsOut, JSON.stringify({ generatedBy: 'tools/asset-pipeline/prepare-track.mjs', lapMetres: Math.round(length), features, points: control, ...(controlWidths ? { halfWidths: controlWidths } : {}) }) + '\n')
-console.log(`\n${cfg.output}: ${(fs.statSync(cfg.output).size / 1048576).toFixed(2)} MB, ${drawCalls} draw calls, ${Math.round(tris / 1000)}k tris, ${root.listTextures().length} textures, ${((Date.now() - t0) / 1000).toFixed(1)} s`)
-console.log(`lap ${length.toFixed(0)} m (${cfg.direction}), ${control.length} control points → ${cfg.pointsOut}; ${startNote}; elevation ${Math.min(...ys).toFixed(0)}..${Math.max(...ys).toFixed(0)} m (${missing} samples off the mesh)`)
+fs.mkdirSync(path.dirname(pointsOutPath), { recursive: true })
+fs.writeFileSync(pointsOutPath, JSON.stringify({ generatedBy: 'tools/asset-pipeline/prepare-track.mjs', lapMetres: Math.round(length), features, points: control, ...(controlWidths ? { halfWidths: controlWidths } : {}) }) + '\n')
+console.log(`\n${outputPath}: ${(fs.statSync(outputPath).size / 1048576).toFixed(2)} MB, ${drawCalls} draw calls, ${Math.round(tris / 1000)}k tris, ${root.listTextures().length} textures, ${((Date.now() - t0) / 1000).toFixed(1)} s`)
+console.log(`lap ${length.toFixed(0)} m (${cfg.direction}), ${control.length} control points → ${pointsOutPath}; ${startNote}; elevation ${Math.min(...ys).toFixed(0)}..${Math.max(...ys).toFixed(0)} m (${missing} samples off the mesh)`)
 console.log(`road width along the line: min ${widths[0].toFixed(1)} median ${widths[widths.length >> 1].toFixed(1)} max ${widths[widths.length - 1].toFixed(1)} m; bounds x[${box[0].toFixed(0)}, ${box[2].toFixed(0)}] z[${box[1].toFixed(0)}, ${box[3].toFixed(0)}]`)
 if (pitFeature) console.log(`pit lane: t ${pitFeature.from}..${pitFeature.to} on side ${pitFeature.side > 0 ? 'right' : 'left'}`)
 else console.log('pit lane: none detected')

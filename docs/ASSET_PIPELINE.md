@@ -85,7 +85,14 @@ Integration points:
   missing slivers in their road surface, so `TrackBuilder` builds an invisible safety net
   3 cm under the asphalt as the physics sees it (rays per spline sample, columns off the
   asphalt capped at their own surface) — a wheel over a gap drops centimetres, not to the
-  apron. `--points-only` regenerates the centreline without rebuilding the .glb.
+  apron; a terrain sheet laid over the road inside its own half-width (Suzuka's first
+  corner has grass 5–20 cm above the asphalt) is treated as asphalt by the net, while a
+  raised verge beyond the half-width stays grass; a coarse "hole net" 44 m either side
+  follows the ground 8 cm below it (30 cm under the road) and bridges gaps in the model so
+  a car that leaves the road drops centimetres, not onto the apron. `--points-only`
+  regenerates the centreline without rebuilding the .glb
+  (`POINTS_OUT=path` writes it elsewhere, so a trace can run while the dev server is busy;
+  `--map` dumps line, skeleton, walls and road triangles for `skelmap.mjs`).
   `dump-gltf.mjs <scene.gltf>` prints a model's node/material/bounds table, `matinfo.mjs`
   lists materials with their base-colour texture, triangle count and extent, `texsheet.mjs`
   renders a contact sheet of those textures (the only way to read ripped exports whose
@@ -103,8 +110,11 @@ Integration points:
   running side by side between the same skeleton junctions (apron, pit lane, service road)
   only the wider survives. Figure-eight circuits (Suzuka) get `crossings: [[x, z]]` — the overpass reads as one
   4-way skeleton junction that no simple cycle can pass twice, so the tracer pairs each arm
-  with the arm opposite it and splits the junction into two straight-through passes, then
-  ranks cycles by length (the lobes wind in opposite directions and cancel in the area sum).
+  with the arm opposite it and splits the junction into two straight-through passes; the
+  lap is then the cycle whose lobes, split at the crossing, enclose the most area (the
+  lobes wind in opposite directions and would cancel in one shoelace sum, and ranking by
+  length instead took every link-road detour). `coreClose` also closes slits in a road
+  stitched from strips (Suzuka's pit straight).
   Ripped exports put the pit lane under a material of its own (Sepang: concrete slabs +
   blue pit-box floors) and a look-alike service strip elsewhere — check the pit zone the
   tracer prints against the start straight before trusting it.
