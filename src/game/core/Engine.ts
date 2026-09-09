@@ -29,7 +29,7 @@ import { saveManager } from '../persistence/SaveManager'
 import { buildTrack, type BuiltTrack } from '../tracks/TrackBuilder'
 import { getTrackDefinition, TRACK_CATALOG, type WeatherKind } from '../tracks/TrackCatalog'
 import { Vehicle } from '../vehicles/Vehicle'
-import { FORMULA_TEAMS, getVehicleSpec, VEHICLE_CATALOG } from '../vehicles/VehicleCatalog'
+import { FORMULA_TEAMS, getVehicleSpec, resolveVehicleId, VEHICLE_CATALOG } from '../vehicles/VehicleCatalog'
 import { defaultCustomization, defaultUpgrades, type VehicleCustomization } from '../vehicles/VehicleSpec'
 import { generateField, type DriverProfile } from '../ai/DriverProfiles'
 import { RacingLine } from '../ai/RacingLine'
@@ -459,10 +459,19 @@ export class Engine {
       // road cars never draw formula traffic. Licensed models stay with the
       // player (the procedural team cars keep the field varied). Otherwise
       // assign a car of similar performance, preferring the driver's favourite.
+      // Fields are class-pure and drawn from the licensed models: a formula player races
+      // the other single-seaters, a GT/DTM player the other GT cars, and so on; the
+      // player's own car is skipped so the grid reads from behind, and every model is
+      // used once before any repeats. Classes with too few cars borrow from the tiers
+      // either side.
       const formulaField = playerSpec.vehicleClass === 'formula'
-      const pool = VEHICLE_CATALOG.filter((c) => !c.model && (formulaField ? c.vehicleClass === 'formula' : c.vehicleClass !== 'formula' && Math.abs(c.tier - playerSpec.tier) <= 1))
-      let spec = pool.find((c) => c.id === driver.favouriteCar && !usedCars.has(c.id)) ?? pool[Math.floor(Math.random() * pool.length)]
-      if (usedCars.size >= pool.length) spec = pool[Math.floor(Math.random() * pool.length)]
+      const sameClass = VEHICLE_CATALOG.filter((c) => c.id !== playerSpec.id && c.vehicleClass === playerSpec.vehicleClass)
+      const similar = VEHICLE_CATALOG.filter((c) => c.id !== playerSpec.id && c.vehicleClass !== 'formula' && Math.abs(c.tier - playerSpec.tier) <= 1)
+      const pool = formulaField ? sameClass : sameClass.length >= 3 ? sameClass : similar.length ? similar : sameClass
+      const fresh = pool.filter((c) => !usedCars.has(c.id))
+      const favourite = resolveVehicleId(driver.favouriteCar)
+      let spec = fresh.find((c) => c.id === favourite) ?? (fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : pool[Math.floor(Math.random() * pool.length)])
+      if (!spec) spec = playerSpec
       usedCars.add(spec.id)
       const custom = defaultCustomization(spec)
       // Formula AI liveries come from the invented team table (two cars per

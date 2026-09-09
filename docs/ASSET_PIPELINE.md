@@ -118,6 +118,18 @@ Integration points:
   Ripped exports put the pit lane under a material of its own (Sepang: concrete slabs +
   blue pit-box floors) and a look-alike service strip elsewhere — check the pit zone the
   tracer prints against the start straight before trusting it.
+* **The garage is licensed models only** (2026-09-09): the eight procedural catalog cars
+  (Vortex, Comet, the Marchetti coupé, the rally hatch, the drift build, the EV, the track
+  special and the prototype) are retired; their ids alias to licensed cars so saves, career
+  events, leaderboards and driver favourites keep working. Every car is unlockLevel 0 and
+  price 0. `CarMeshBuilder` remains the fallback when a model file fails to load. AI fields
+  are class-pure and drawn from the licensed models (a formula player races the other
+  single-seaters, each model used once before any repeats; GT/DTM fields likewise), so the
+  grid reads from behind by car rather than by livery — paint and decals are baked into
+  the models, the invented team table only colours procedural bodies. Cars with baked
+  wheels (`wheelDetect: 'contact'`) sometimes read a rim or an arch as the tyre ring:
+  pin `wheelRadius`. Model tracks build no procedural props or city dressing (they carry
+  their own scenery); the props library still dresses the procedural circuits.
 * **Scenery library** — `node tools/asset-pipeline/prepare-props.mjs city` groups a scene's objects by
   footprint overlap into props, drops ground sheets, classifies them by size (building, shop,
   railing, bollard, post, billboard), centres each on its footprint with its base at y = 0 and

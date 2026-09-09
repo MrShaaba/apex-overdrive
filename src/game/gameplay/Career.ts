@@ -45,7 +45,7 @@ export const CAREER: CareerChapter[] = [
       { id: 'c1-e1', title: 'First Light', intro: 'The Isla Verde club runs a Sunday sprint. Three laps. Show them what the Cobra can do.', mode: 'quick', trackId: 'island-causeway', laps: 2, aiCount: 5, aiMix: 'rookie', weather: 'clear', hour: 8, rewardCredits: 6000 },
       { id: 'c1-e2', title: 'Lakeside Hot Lap', intro: 'Set a lap under 1:40 at Lago Sereno to qualify for the club championship.', mode: 'timetrial', trackId: 'lakeside-circuit', laps: 3, aiCount: 0, aiMix: 'rookie', weather: 'clear', hour: 10, rewardCredits: 5000 },
       { id: 'c1-e3', title: 'Forest Dust-Up', intro: 'Ardenne in the morning fog. Six rookies, one podium. Watch the logging crossing.', mode: 'quick', trackId: 'woodland-raceway', laps: 3, aiCount: 7, aiMix: 'rookie', weather: 'fog', hour: 7, rewardCredits: 8000 },
-      { id: 'c1-e4', title: 'Last One Standing', intro: 'Elimination race around the causeway. Every twenty seconds the tail car goes home.', mode: 'elimination', trackId: 'island-causeway', laps: 20, aiCount: 9, aiMix: 'amateur', weather: 'cloudy', hour: 16, rewardCredits: 12000, rewardCar: 'vintage-coupe' },
+      { id: 'c1-e4', title: 'Last One Standing', intro: 'Elimination race around the causeway. Every twenty seconds the tail car goes home.', mode: 'elimination', trackId: 'island-causeway', laps: 20, aiCount: 9, aiMix: 'amateur', weather: 'cloudy', hour: 16, rewardCredits: 12000, rewardCar: 'mercedes-190e' },
     ],
   },
   {
@@ -55,9 +55,9 @@ export const CAREER: CareerChapter[] = [
     starsToUnlock: 6,
     events: [
       { id: 'c2-e1', title: 'Metro Rush Hour', intro: 'Harbor City at dusk. Ninety-degree corners, level crossing, thirteen cars.', mode: 'quick', trackId: 'metro-loop', laps: 3, aiCount: 11, aiMix: 'amateur', weather: 'clear', hour: 18, rewardCredits: 12000, rivalId: 'rafael-costa' },
-      { id: 'c2-e2', title: 'Slide Night', intro: 'The drift crew wants 25,000 points before they take you seriously. Any car, any angle.', mode: 'drift', trackId: 'lakeside-circuit', laps: 2, aiCount: 0, aiMix: 'amateur', weather: 'clear', hour: 20, rewardCredits: 10000, rewardCar: 'drift-build' },
+      { id: 'c2-e2', title: 'Slide Night', intro: 'The drift crew wants 25,000 points before they take you seriously. Any car, any angle.', mode: 'drift', trackId: 'lakeside-circuit', laps: 2, aiCount: 0, aiMix: 'amateur', weather: 'clear', hour: 20, rewardCredits: 10000, rewardCar: 'dodge-charger' },
       { id: 'c2-e3', title: 'Wet Docks', intro: 'Rotterdam in the rain. The crane swings on a twelve-second cycle; learn it.', mode: 'quick', trackId: 'shipyard-district', laps: 3, aiCount: 9, aiMix: 'amateur', weather: 'rain', hour: 19, rewardCredits: 14000 },
-      { id: 'c2-e4', title: 'Costa Cup', intro: 'A four-round season cup. Costa is quick everywhere. Beat him on points.', mode: 'championship', trackId: 'metro-loop', laps: 3, aiCount: 11, aiMix: 'amateur', weather: 'random', hour: 'default', rewardCredits: 25000, rivalId: 'rafael-costa', rewardCar: 'rally-hatch' },
+      { id: 'c2-e4', title: 'Costa Cup', intro: 'A four-round season cup. Costa is quick everywhere. Beat him on points.', mode: 'championship', trackId: 'metro-loop', laps: 3, aiCount: 11, aiMix: 'amateur', weather: 'random', hour: 'default', rewardCredits: 25000, rivalId: 'rafael-costa', rewardCar: 'mercedes-clk-dtm' },
     ],
   },
   {
@@ -81,7 +81,7 @@ export const CAREER: CareerChapter[] = [
       { id: 'c4-e1', title: 'Glacier Baptism', intro: 'Winter tyres or nothing. Ice patches migrate; the tunnel is your only dry line.', mode: 'quick', trackId: 'glacier-road', laps: 2, aiCount: 9, aiMix: 'pro', weather: 'snow', hour: 11, rewardCredits: 20000 },
       { id: 'c4-e2', title: 'Whiteout Elimination', intro: 'Blizzard. Elimination. Visibility is a rumour.', mode: 'elimination', trackId: 'glacier-road', laps: 20, aiCount: 11, aiMix: 'pro', weather: 'blizzard', hour: 14, rewardCredits: 24000 },
       { id: 'c4-e3', title: 'Hale Storm', intro: 'Hale sets the bar at Woodland in a storm. Beat his lap in the time trial.', mode: 'timetrial', trackId: 'woodland-raceway', laps: 4, aiCount: 0, aiMix: 'elite', weather: 'storm', hour: 16, rewardCredits: 18000, rivalId: 'marcus-hale' },
-      { id: 'c4-e4', title: 'Frozen Cup', intro: 'Four rounds across the north. Hale is in every one of them.', mode: 'championship', trackId: 'glacier-road', laps: 2, aiCount: 11, aiMix: 'elite', weather: 'random', hour: 'default', rewardCredits: 40000, rivalId: 'marcus-hale', rewardCar: 'performance-ev' },
+      { id: 'c4-e4', title: 'Frozen Cup', intro: 'Four rounds across the north. Hale is in every one of them.', mode: 'championship', trackId: 'glacier-road', laps: 2, aiCount: 11, aiMix: 'elite', weather: 'random', hour: 'default', rewardCredits: 40000, rivalId: 'marcus-hale', rewardCar: 'jaguar-i-type' },
     ],
   },
   {
@@ -104,8 +104,8 @@ export const CAREER: CareerChapter[] = [
     events: [
       { id: 'c6-e1', title: 'Pro-Am Qualifier', intro: 'Track special, Lakeside, twelve legends. Podium or go home.', mode: 'quick', trackId: 'lakeside-circuit', laps: 4, aiCount: 13, aiMix: 'legend', weather: 'clear', hour: 12, rewardCredits: 35000, requiredClass: ['track', 'supercar', 'prototype', 'gt'] },
       { id: 'c6-e2', title: 'Alpine Assault', intro: 'Two laps of Stelvio against Moreno. He does not brake early.', mode: 'quick', trackId: 'alpine-ridge', laps: 2, aiCount: 13, aiMix: 'legend', weather: 'random', hour: 'default', rewardCredits: 40000, rivalId: 'kai-moreno' },
-      { id: 'c6-e3', title: 'Twenty-Four Minutes', intro: 'Endurance at the causeway. Varga\'s prototype finds grip where there is none.', mode: 'endurance', trackId: 'island-causeway', laps: 14, aiCount: 13, aiMix: 'legend', weather: 'random', hour: 17, rewardCredits: 60000, rivalId: 'ines-varga', rewardCar: 'track-special' },
-      { id: 'c6-e4', title: 'Apex Grand Final', intro: 'Four rounds. Every legend. The league title.', mode: 'championship', trackId: 'neon-boulevard', laps: 3, aiCount: 13, aiMix: 'legend', weather: 'random', hour: 'default', rewardCredits: 120000, rewardCar: 'endurance-prototype' },
+      { id: 'c6-e3', title: 'Twenty-Four Minutes', intro: 'Endurance at the causeway. Varga\'s prototype finds grip where there is none.', mode: 'endurance', trackId: 'island-causeway', laps: 14, aiCount: 13, aiMix: 'legend', weather: 'random', hour: 17, rewardCredits: 60000, rivalId: 'ines-varga', rewardCar: 'mclaren-f1-gtr' },
+      { id: 'c6-e4', title: 'Apex Grand Final', intro: 'Four rounds. Every legend. The league title.', mode: 'championship', trackId: 'neon-boulevard', laps: 3, aiCount: 13, aiMix: 'legend', weather: 'random', hour: 'default', rewardCredits: 120000, rewardCar: 'mclaren-f1-gtr-longtail' },
     ],
   },
 ]

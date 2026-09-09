@@ -1,7 +1,19 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-09T06:57:13.271Z",
+  "generatedAt": "2026-09-09T07:10:17.830Z",
   "assets": [
+    {
+      "id": "model.cars.amgone",
+      "type": "model",
+      "file": "models/cars/amgone.glb",
+      "bytes": 4757756
+    },
+    {
+      "id": "model.cars.ccoupedtm",
+      "type": "model",
+      "file": "models/cars/ccoupedtm.glb",
+      "bytes": 8891968
+    },
     {
       "id": "model.cars.challenger",
       "type": "model",
@@ -13,6 +25,12 @@
       "type": "model",
       "file": "models/cars/charger.glb",
       "bytes": 17602832
+    },
+    {
+      "id": "model.cars.clkdtm",
+      "type": "model",
+      "file": "models/cars/clkdtm.glb",
+      "bytes": 6287140
     },
     {
       "id": "model.cars.countach",
@@ -27,10 +45,40 @@
       "bytes": 15407920
     },
     {
+      "id": "model.cars.gtrfina",
+      "type": "model",
+      "file": "models/cars/gtrfina.glb",
+      "bytes": 6048816
+    },
+    {
+      "id": "model.cars.gtrgulf",
+      "type": "model",
+      "file": "models/cars/gtrgulf.glb",
+      "bytes": 5144688
+    },
+    {
       "id": "model.cars.huracan",
       "type": "model",
       "file": "models/cars/huracan.glb",
       "bytes": 1804100
+    },
+    {
+      "id": "model.cars.jaguar",
+      "type": "model",
+      "file": "models/cars/jaguar.glb",
+      "bytes": 1554712
+    },
+    {
+      "id": "model.cars.longtail",
+      "type": "model",
+      "file": "models/cars/longtail.glb",
+      "bytes": 1538736
+    },
+    {
+      "id": "model.cars.lotus72d",
+      "type": "model",
+      "file": "models/cars/lotus72d.glb",
+      "bytes": 1326680
     },
     {
       "id": "model.cars.mcl35m",
@@ -57,10 +105,40 @@
       "bytes": 10431984
     },
     {
+      "id": "model.cars.sls",
+      "type": "model",
+      "file": "models/cars/sls.glb",
+      "bytes": 2848804
+    },
+    {
+      "id": "model.cars.w11",
+      "type": "model",
+      "file": "models/cars/w11.glb",
+      "bytes": 8872860
+    },
+    {
       "id": "model.cars.w13",
       "type": "model",
       "file": "models/cars/w13.glb",
       "bytes": 9352788
+    },
+    {
+      "id": "model.cars.w14",
+      "type": "model",
+      "file": "models/cars/w14.glb",
+      "bytes": 7745464
+    },
+    {
+      "id": "model.cars.w14free",
+      "type": "model",
+      "file": "models/cars/w14free.glb",
+      "bytes": 1421640
+    },
+    {
+      "id": "model.cars.w201",
+      "type": "model",
+      "file": "models/cars/w201.glb",
+      "bytes": 14536184
     },
     {
       "id": "model.cockpit.mclaren_wheel",
