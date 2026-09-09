@@ -13,6 +13,7 @@ import type { SurfaceType } from '../physics/Surfaces'
 import driftPoints from './data/drift.points.json'
 import spaPoints from './data/spa.points.json'
 import bugattiPoints from './data/bugatti.points.json'
+import hungaroringPoints from './data/hungaroring.points.json'
 
 export type TrackTheme = 'island' | 'alpine' | 'badlands' | 'woodland' | 'metro' | 'glacier' | 'shipyard' | 'neon' | 'lakeside'
 export type WeatherKind = 'clear' | 'cloudy' | 'overcast' | 'rain' | 'storm' | 'fog' | 'snow' | 'blizzard'
@@ -438,6 +439,29 @@ export const TRACK_CATALOG: TrackDefinition[] = [
     halfWidths: bugattiPoints.halfWidths,
     features: [
       ...(bugattiPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
+      { type: 'sector', at: 0.33 },
+      { type: 'sector', at: 0.66 },
+    ],
+  },
+  {
+    id: 'hungaroring',
+    name: 'Hungaroring',
+    location: 'Mogyoród, Hungary',
+    description: 'A twisting, dusty ribbon in a natural bowl outside Budapest: one real straight, then corner after corner with no room to rest. Hard to pass on, so qualifying and clean laps matter.',
+    theme: 'woodland',
+    model: { file: 'assets/models/tracks/hungaroring.glb', credit: '"Hungaroring 2020 layout" by Dave Love SketchFab, CC-BY 4.0' },
+    closed: true,
+    width: 13,
+    difficulty: 4,
+    unlockLevel: 1,
+    defaultLaps: 4,
+    lengthKm: +(hungaroringPoints.lapMetres / 1000).toFixed(2),
+    bestLapReference: 76,
+    environment: env({ terrain: 'valley', terrainAmplitude: 0, defaultHour: 13, skyTint: '#b7d3f2', groundColor: '#6b8a3e', treeDensity: 0, buildingDensity: 0, fogDensity: 0.0006, weatherOptions: ['clear', 'cloudy', 'overcast', 'rain'] }),
+    points: hungaroringPoints.points as [number, number, number][],
+    halfWidths: hungaroringPoints.halfWidths,
+    features: [
+      ...(hungaroringPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
       { type: 'sector', at: 0.33 },
       { type: 'sector', at: 0.66 },
     ],

@@ -95,6 +95,56 @@ const TRACKS = {
     noShadow: /trees|pines|TREE|GRASS|BACKGRD|TRANSIT|FPOLE|CORNERWORKER|cameraman|TEAMMEMBERS|GSSEATS|EQUIP|^CARS|RUBBER|FENCE/,
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
+  hungaroring: {
+    source: 'assets-src/models/tracks/hungaroring_2020_layout/scene.gltf',
+    output: 'public/assets/models/tracks/hungaroring.glb',
+    pointsOut: 'src/game/tracks/data/hungaroring.points.json',
+    credit: 'Hungaroring 2020 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'cw',
+    controlSpacing: 10,
+    startMarker: /_15$/, // the pit wall along the main straight (the light panels are scattered marshal lights)
+    // A ripped export: material names are numbers, read off the texture contact sheet.
+    rules: [
+      { cls: 'road', material: /_76$/ }, // the track surface, with its asphalt run-off aprons
+      { cls: 'road', material: /_14$|_75$/, lap: 'near' }, // shoulders, pit lane, paddock; light asphalt run-off
+      { cls: 'kerb', material: /_2$|_0$|_1$/ },
+      { cls: 'runoff', material: /_36$/ }, // concrete run-off
+      { cls: 'overlay', material: /_56$|_11$|_10$|_90$|_12$/ }, // edge lines, skid marks, pit markings
+      { cls: 'terrain', material: /^Merged_materials|_3$|_4$|_18$|_13$|_73$/ }, // grass, the aerial backdrop, dirt roads
+      { cls: 'wall', material: /_8$|_21$|_53$|_6$|_15$|_45$|_7$/ }, // armco, concrete and stone walls, posts, pit wall, barrier covers
+    ],
+    decimate: { wall: 0.4, prop: 0.5, terrain: 0.7 },
+    noShadow: /_77$|^Merged_materials|_3$|_4$|_18$|_13$|_73$|_84$|_39$|_40$|_79$|_80$|_96$|_58$|_23$|_25$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  yas: {
+    source: 'assets-src/models/tracks/yas_marina_circuit_abu_dhabi_2021_layout/scene.gltf',
+    output: 'public/assets/models/tracks/yas.glb',
+    pointsOut: 'src/game/tracks/data/yas.points.json',
+    credit: 'Yas Marina Circuit Abu Dhabi 2021 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'ccw',
+    controlSpacing: 10,
+    startMarker: /tentrail_45$/, // an 8 m cube with the start-gantry light board texture
+    // A ripped export: material names are numbers, read off the texture contact sheet and material mini-maps.
+    rules: [
+      { cls: 'road', material: /tentrail_32$/ }, // the track
+      { cls: 'road', material: /tentrail_28$|tentrail_29$|tentrail_19$/, lap: 'near' }, // asphalt run-off and aprons
+      { cls: 'pit', material: /tentrail_58$/ },
+      { cls: 'kerb', material: /tentrail_21$|tentrail_20$|tentrail_66$/ },
+      { cls: 'runoff', material: /tentrail_31$|tentrail_34$/ }, // blue and white painted run-off
+      { cls: 'overlay', material: /tentrail_30$|tentrail_87$|tentrail_16$/ }, // edge lines, skid marks, markings
+      { cls: 'gravel', material: /tentrail_11$|tentrail_26$/ }, // sand
+      { cls: 'terrain', material: /tentrail_69$|tentrail_25$/ },
+      { cls: 'wall', material: /tentrail_17$|tentrail_46$|tentrail_73$/ }, // barriers, fence posts, catch fencing
+    ],
+    decimate: { wall: 0.4, prop: 0.5, terrain: 0.7 },
+    noShadow: /tentrail_57$|^Merged_materials|tentrail_89$|tentrail_86$|tentrail_69$|tentrail_25$|tentrail_11$|tentrail_26$|tentrail_72$|tentrail_73$|tentrail_75$|tentrail_42$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
   spa: {
     source: 'assets-src/models/tracks/circuit_de_spa-francorchamps_2022_layout/scene.gltf',
     output: 'public/assets/models/tracks/spa.glb',
@@ -300,80 +350,74 @@ const thin = (g) => {
 // a band around the lap. Paddocks, car parks and access roads hang off the
 // outside and never separate it from the infield, so they drop out here without
 // any cycle search (which explodes on the internal loops of a paddock).
-const lapBand = () => {
-  const N = GW * GH
-  const label = new Int32Array(N).fill(-1)
-  const q = new Int32Array(N)
-  const fill = (seeds, id) => { let h = 0, t = 0; for (const c of seeds) { if (label[c] !== -1) continue; label[c] = id; q[t++] = c }; let count = 0; while (h < t) { const c = q[h++]; count++; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === -1 && !grid[n]) { label[n] = id; q[t++] = n } } } return count }
-  const border = []
-  for (let x = 0; x < GW; x++) { if (!grid[x]) border.push(x); if (!grid[(GH - 1) * GW + x]) border.push((GH - 1) * GW + x) }
-  for (let z = 0; z < GH; z++) { if (!grid[z * GW]) border.push(z * GW); if (!grid[z * GW + GW - 1]) border.push(z * GW + GW - 1) }
-  fill(border, 1)
-  let best = -1, bestCount = 0, next = 2
-  for (let i = 0; i < N; i++) { if (grid[i] || label[i] !== -1) continue; const count = fill([i], next); if (count > bestCount) { bestCount = count; best = next } next++ }
-  if (process.env.DEBUG_BAND && (best < 0 || bestCount * RES * RES < 5000)) { const pts = []; for (let i = 0; i < N; i++) if (grid[i]) pts.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-band.json`), JSON.stringify({ band: pts, infield: [], res: RES })) }
-  if (best < 0 || bestCount * RES * RES < 5000) {
-    // Where does the outside get in? Walk from the deepest outside cell back to the border
-    // along the flood's distance field and report the tightest squeeze between road cells.
-    const dB = new Int32Array(N).fill(-1); let h = 0, t = 0
-    for (const c of border) if (label[c] === 1 && dB[c] < 0) { dB[c] = 0; q[t++] = c }
-    while (h < t) { const c = q[h++]; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === 1 && dB[n] < 0) { dB[n] = dB[c] + 1; q[t++] = n } } }
-    let deep = -1, deepD = -1; for (let i = 0; i < N; i++) if (dB[i] > deepD) { deepD = dB[i]; deep = i }
-    const roadDist = (c) => { const x = c % GW, z = (c - x) / GW; for (let r = 1; r <= 12; r++) { for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && grid[Z * GW + X]) return r } } return 13 }
-    let cur = deep, tight = null, tightD = 99
-    const trail = []
-    for (let guard = 0; guard < N && cur >= 0 && dB[cur] > 0; guard++) { const rd = roadDist(cur); if (guard % 50 === 0) trail.push(`(${(gx0 + (cur % GW) * RES).toFixed(0)},${(gz0 + Math.floor(cur / GW) * RES).toFixed(0)}):${rd}`); if (rd < tightD && guard > 5) { tightD = rd; tight = cur } const x = cur % GW, z = (cur - x) / GW; let nxt = -1; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === 1 && dB[n] >= 0 && dB[n] < dB[cur]) { nxt = n; break } } cur = nxt }
-    // Decisive locator: widen the core until an infield appears; the cells that only
-    // exist in the widened core and separate that infield from the outside plug the gap.
-    for (const K of [2, 4, 6, 9, 13, 18]) {
-      const gK = dilate(grid, Math.max(1, Math.round(K / RES)))
-      const labK = new Int32Array(N).fill(-1)
-      const fillK = (seeds, id) => { let h2 = 0, t2 = 0; for (const c of seeds) { if (labK[c] !== -1 || gK[c]) continue; labK[c] = id; q[t2++] = c }; let count = 0; while (h2 < t2) { const c = q[h2++]; count++; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (labK[n] === -1 && !gK[n]) { labK[n] = id; q[t2++] = n } } } return count }
-      fillK(border, 1)
-      let bestK = -1, bestKCount = 0, nextK = 2
-      for (let i = 0; i < N; i++) { if (gK[i] || labK[i] !== -1) continue; const count = fillK([i], nextK); if (count > bestKCount) { bestKCount = count; bestK = nextK } nextK++ }
-      if (bestK < 0 || bestKCount * RES * RES < 20000) continue
-      // Distance (in cells, through anything) from the infield and from the outside, capped.
-      const near = (id, cap) => { const d = new Int32Array(N).fill(-1); let h2 = 0, t2 = 0; for (let i = 0; i < N; i++) if (labK[i] === id) { d[i] = 0; q[t2++] = i } while (h2 < t2) { const c = q[h2++]; if (d[c] >= cap) continue; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (d[n] < 0) { d[n] = d[c] + 1; q[t2++] = n } } } return d }
-      const cap = Math.round(K / RES) + 3
-      const dInf = near(bestK, cap), dOutK = near(1, cap)
-      let sx = 0, sz = 0, sn = 0
-      const samples = []
-      for (let i = 0; i < N; i++) { if (!gK[i] || grid[i] || dInf[i] < 0 || dOutK[i] < 0) continue; const x = i % GW, z = (i - x) / GW; sx += x; sz += z; sn++; if (samples.length < 4 && sn % 40 === 1) samples.push(`(${(gx0 + x * RES).toFixed(0)},${(gz0 + z * RES).toFixed(0)})`) }
-      console.log(`ring gap: widening the core by ${K} m encloses an infield of ${Math.round(bestKCount * RES * RES)} m²; the plug (${sn} cells) centres on (${(gx0 + (sx / Math.max(1, sn)) * RES).toFixed(0)}, ${(gz0 + (sz / Math.max(1, sn)) * RES).toFixed(0)}); samples ${samples.join(' ')}`)
-      break
+const N_CELLS = GW * GH
+const fillFrom = (g, label, seeds, id, q) => { let h = 0, t = 0; for (const c of seeds) { if (label[c] !== -1 || g[c]) continue; label[c] = id; q[t++] = c }; let count = 0; while (h < t) { const c = q[h++]; count++; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === -1 && !g[n]) { label[n] = id; q[t++] = n } } } return count }
+const borderCells = (g) => { const b = []; for (let x = 0; x < GW; x++) { if (!g[x]) b.push(x); if (!g[(GH - 1) * GW + x]) b.push((GH - 1) * GW + x) } for (let z = 0; z < GH; z++) { if (!g[z * GW]) b.push(z * GW); if (!g[z * GW + GW - 1]) b.push(z * GW + GW - 1) } return b }
+// Regions of a grid: label 1 = outside, 2.. = enclosed; returns the largest enclosed id/count.
+const labelRegions = (g) => { const label = new Int32Array(N_CELLS).fill(-1); const q = new Int32Array(N_CELLS); fillFrom(g, label, borderCells(g), 1, q); let best = -1, bestCount = 0, next = 2; for (let i = 0; i < N_CELLS; i++) { if (g[i] || label[i] !== -1) continue; const count = fillFrom(g, label, [i], next, q); if (count > bestCount) { bestCount = count; best = next } next++ } return { label, best, bestCount, regions: next - 2 } }
+// Widen the core until a real infield appears; the widened-only cells that separate
+// it from the outside plug the ring gap. Returns { K, plug } or null.
+const findPlug = (g, roadCells) => {
+  const q = new Int32Array(N_CELLS)
+  for (const K of [2, 4, 6, 9, 13, 18]) {
+    const gK = dilate(g, Math.max(1, Math.round(K / RES)))
+    const { label, best, bestCount } = labelRegions(gK)
+    if (best < 0 || bestCount < 2 * roadCells) continue
+    const near = (id, cap) => { const d = new Int32Array(N_CELLS).fill(-1); let h = 0, t = 0; for (let i = 0; i < N_CELLS; i++) if (label[i] === id) { d[i] = 0; q[t++] = i } while (h < t) { const c = q[h++]; if (d[c] >= cap) continue; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (d[n] < 0) { d[n] = d[c] + 1; q[t++] = n } } } return d }
+    const cap = Math.round(K / RES) + 3
+    const dInf = near(best, cap), dOut = near(1, cap)
+    const plug = []
+    let sx = 0, sz = 0
+    for (let i = 0; i < N_CELLS; i++) if (gK[i] && !g[i] && dInf[i] >= 0 && dOut[i] >= 0) { plug.push(i); sx += i % GW; sz += Math.floor(i / GW) }
+    console.log(`ring gap: widening the core by ${K} m encloses an infield of ${Math.round(bestCount * RES * RES)} m²; the plug (${plug.length} cells) centres on (${(gx0 + (sx / Math.max(1, plug.length)) * RES).toFixed(0)}, ${(gz0 + (sz / Math.max(1, plug.length)) * RES).toFixed(0)})`)
+    return { K, plug }
+  }
+  return null
+}
+const lapBandOn = (g, allowPlug) => {
+  const { label, best, bestCount, regions } = labelRegions(g)
+  // A circuit's infield is several times its road area; a smaller "infield" is a pocket
+  // and the real ring is open somewhere.
+  let roadCells = 0; for (let i = 0; i < N_CELLS; i++) roadCells += g[i]
+  const tooSmall = best < 0 || bestCount < 2 * roadCells
+  if (tooSmall && allowPlug) {
+    const found = findPlug(g, roadCells)
+    if (found && found.plug.length) {
+      // Bridging a gap in the model's road ring (a bridge deck in another material, a
+      // missing patch) is automatic and bounded; the plug is logged above.
+      const patched = Uint8Array.from(g)
+      for (const i of found.plug) patched[i] = 1
+      console.log(`bridging the ~${found.K * 2} m ring gap with ${found.plug.length} road cells and tracing again`)
+      return lapBandOn(patched, false)
     }
-    // Crossing a broken ring means road on two opposite sides of the trail cell.
-    const along = (c, dx, dz) => { let x = c % GW, z = (c - x) / GW; for (let r = 1; r <= 20; r++) { x += dx; z += dz; if (x < 0 || z < 0 || x >= GW || z >= GH) return 21; if (grid[z * GW + x]) return r } return 21 }
-    const spots = []
-    cur = deep
-    for (let guard = 0; guard < N && cur >= 0 && dB[cur] > 0; guard++) { const sc = Math.min(Math.max(along(cur, 1, 0), along(cur, -1, 0)), Math.max(along(cur, 0, 1), along(cur, 0, -1)), Math.max(along(cur, 1, 1), along(cur, -1, -1)), Math.max(along(cur, 1, -1), along(cur, -1, 1))); if (sc <= 15) spots.push([sc, cur]); const x = cur % GW, z = (cur - x) / GW; let nxt = -1; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (label[n] === 1 && dB[n] >= 0 && dB[n] < dB[cur]) { nxt = n; break } } cur = nxt }
-    spots.sort((a, b) => a[0] - b[0])
-    const seen = []
-    for (const [sc, c] of spots) { const wx = gx0 + (c % GW) * RES, wz = gz0 + Math.floor(c / GW) * RES; if (seen.some(([x, z]) => Math.hypot(x - wx, z - wz) < 40)) continue; seen.push([wx, wz, sc]); if (seen.length >= 5) break }
-    console.log(`gap candidates (road on both sides within N m): ${seen.map(([x, z, sc]) => `(${x.toFixed(0)}, ${z.toFixed(0)}) ${sc * RES} m`).join('; ')}`)
-    if (tight !== null) console.log(`leak: the outside squeezes past the road at (${(gx0 + (tight % GW) * RES).toFixed(0)}, ${(gz0 + Math.floor(tight / GW) * RES).toFixed(0)}) — road within ${tightD * RES} m there; deepest interior cell (${(gx0 + (deep % GW) * RES).toFixed(0)}, ${(gz0 + Math.floor(deep / GW) * RES).toFixed(0)}) is ${deepD * RES} m from the border; trail every 50 m (pos:road-distance) ${trail.slice(0, 60).join(' ')}`)
-    console.log(`no infield: ${next - 2} enclosed regions, largest ${Math.round(bestCount * RES * RES)} m² — the core raster does not close around one (the outside leaks in through a gap); falling back to the skeleton`); return null }
-  const dist = (ids) => { const d = new Int32Array(N).fill(-1); let h = 0, t = 0; for (let i = 0; i < N; i++) { if (!grid[i]) continue; const x = i % GW, z = (i - x) / GW; let touch = false; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && ids.has(label[Z * GW + X])) touch = true } if (touch) { d[i] = 0; q[t++] = i } } while (h < t) { const c = q[h++]; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (grid[n] && d[n] < 0) { d[n] = d[c] + 1; q[t++] = n } } } return d }
+  }
+  if (process.env.DEBUG_BAND && tooSmall) { const pts = []; for (let i = 0; i < N_CELLS; i++) if (g[i]) pts.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-band.json`), JSON.stringify({ band: pts, infield: [], res: RES })) }
+  if (tooSmall) { console.log(`no infield: ${regions} enclosed regions, largest ${Math.round(bestCount * RES * RES)} m² — the core raster does not close around one (the outside leaks in through a gap); falling back to the skeleton`); return null }
+  const q = new Int32Array(N_CELLS)
+  const dist = (ids) => { const d = new Int32Array(N_CELLS).fill(-1); let h = 0, t = 0; for (let i = 0; i < N_CELLS; i++) { if (!g[i]) continue; const x = i % GW, z = (i - x) / GW; let touch = false; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && ids.has(label[Z * GW + X])) touch = true } if (touch) { d[i] = 0; q[t++] = i } } while (h < t) { const c = q[h++]; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (g[n] && d[n] < 0) { d[n] = d[c] + 1; q[t++] = n } } } return d }
   // Every other enclosed pocket (a strip between groove and kerb, a run-off ringed
   // by kerbs) joins whichever side its neighbouring road cells are nearer to;
   // left alone it would block the distance field and cut the band.
   const inside = new Set([best]), outside = new Set([1])
   const d1In = dist(inside), d1Out = dist(outside)
   const votes = new Map()
-  for (let i = 0; i < N; i++) { if (!grid[i]) continue; const x = i % GW, z = (i - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const r = label[Z * GW + X]; if (r < 2 || r === best) continue; const v = votes.get(r) ?? [0, 0]; if (d1In[i] >= 0 && (d1Out[i] < 0 || d1In[i] < d1Out[i])) v[0]++; else if (d1Out[i] >= 0) v[1]++; votes.set(r, v) } }
+  for (let i = 0; i < N_CELLS; i++) { if (!g[i]) continue; const x = i % GW, z = (i - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const r = label[Z * GW + X]; if (r < 2 || r === best) continue; const v = votes.get(r) ?? [0, 0]; if (d1In[i] >= 0 && (d1Out[i] < 0 || d1In[i] < d1Out[i])) v[0]++; else if (d1Out[i] >= 0) v[1]++; votes.set(r, v) } }
   for (const [r, [vin, vout]] of votes) (vin >= vout ? inside : outside).add(r)
   const dIn = dist(inside), dOut = dist(outside)
-  const band = new Uint8Array(N)
+  const band = new Uint8Array(N_CELLS)
   let cells = 0
-  for (let i = 0; i < N; i++) if (grid[i] && dIn[i] >= 0 && dOut[i] >= 0 && Math.abs(dIn[i] - dOut[i]) <= 1) { band[i] = 1; cells++ }
-  console.log(`infield ${Math.round(bestCount * RES * RES)} m² (${next - 2} enclosed regions); lap band ${cells} cells`)
-  if (process.env.DEBUG_BAND) { const pts = []; for (let i = 0; i < N; i++) if (band[i]) pts.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); const inf = []; for (let i = 0; i < N; i += 3) if (label[i] === best) inf.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-band.json`), JSON.stringify({ band: pts, infield: inf, res: RES })) }
-  return cells ? morph(band, (cnt) => cnt > 0) : null
+  for (let i = 0; i < N_CELLS; i++) if (g[i] && dIn[i] >= 0 && dOut[i] >= 0 && Math.abs(dIn[i] - dOut[i]) <= 1) { band[i] = 1; cells++ }
+  console.log(`infield ${Math.round(bestCount * RES * RES)} m² (${regions} enclosed regions); lap band ${cells} cells`)
+  if (process.env.DEBUG_BAND) { const pts = []; for (let i = 0; i < N_CELLS; i++) if (band[i]) pts.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); const inf = []; for (let i = 0; i < N_CELLS; i += 3) if (label[i] === best) inf.push([gx0 + (i % GW) * RES, gz0 + Math.floor(i / GW) * RES]); fs.writeFileSync(path.join(os.tmpdir(), `${trackId}-band.json`), JSON.stringify({ band: pts, infield: inf, res: RES })) }
+  if (!cells) return null
+  // The plug is road for the trace only; the bridged cells also join the grid so the
+  // re-centring walk and width measurement see a continuous surface there.
+  if (g !== grid) for (let i = 0; i < N_CELLS; i++) if (g[i]) grid[i] = 1
+  return morph(band, (cnt) => cnt > 0)
 }
 // `tracer: 'skeleton'` keeps the whole-raster skeleton + largest cycle for layouts
 // where the band is not the lap (Drift Park is a wide pad with an island).
-const band = cfg.tracer === 'skeleton' ? null : lapBand()
+const band = cfg.tracer === 'skeleton' ? null : lapBandOn(grid, true)
 let skel = thin(band ?? grid)
 const nb8 = (g, x, z) => { const out = []; for (const [dx, dz] of [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]) if (at(g, x + dx, z + dz)) out.push([x + dx, z + dz]); return out }
 let pruned = 0

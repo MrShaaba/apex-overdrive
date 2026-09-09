@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-09T04:25:05.625Z",
+  "generatedAt": "2026-09-09T04:42:29.215Z",
   "assets": [
     {
       "id": "model.cars.challenger",
@@ -85,6 +85,12 @@
       "type": "model",
       "file": "models/tracks/drift.glb",
       "bytes": 15720164
+    },
+    {
+      "id": "model.tracks.hungaroring",
+      "type": "model",
+      "file": "models/tracks/hungaroring.glb",
+      "bytes": 35728584
     },
     {
       "id": "model.tracks.spa",
