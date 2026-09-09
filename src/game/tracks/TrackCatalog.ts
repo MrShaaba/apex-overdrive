@@ -14,6 +14,7 @@ import driftPoints from './data/drift.points.json'
 import spaPoints from './data/spa.points.json'
 import bugattiPoints from './data/bugatti.points.json'
 import hungaroringPoints from './data/hungaroring.points.json'
+import sepangPoints from './data/sepang.points.json'
 
 export type TrackTheme = 'island' | 'alpine' | 'badlands' | 'woodland' | 'metro' | 'glacier' | 'shipyard' | 'neon' | 'lakeside'
 export type WeatherKind = 'clear' | 'cloudy' | 'overcast' | 'rain' | 'storm' | 'fog' | 'snow' | 'blizzard'
@@ -462,6 +463,29 @@ export const TRACK_CATALOG: TrackDefinition[] = [
     halfWidths: hungaroringPoints.halfWidths,
     features: [
       ...(hungaroringPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
+      { type: 'sector', at: 0.33 },
+      { type: 'sector', at: 0.66 },
+    ],
+  },
+  {
+    id: 'sepang',
+    name: 'Sepang International Circuit',
+    location: 'Sepang, Malaysia',
+    description: 'Two huge straights joined by a hairpin, then long, wide sweepers through the palm plantations. Fast, hot and humid: the wide track invites side-by-side racing all the way round.',
+    theme: 'island',
+    model: { file: 'assets/models/tracks/sepang.glb', credit: '"Sepang International Circuit 2025 layout" by Dave Love SketchFab, CC-BY 4.0' },
+    closed: true,
+    width: 14,
+    difficulty: 3,
+    unlockLevel: 1,
+    defaultLaps: 3,
+    lengthKm: +(sepangPoints.lapMetres / 1000).toFixed(2),
+    bestLapReference: 100,
+    environment: env({ terrain: 'valley', terrainAmplitude: 0, defaultHour: 14, skyTint: '#bcd6f0', groundColor: '#5f8a3a', treeDensity: 0, buildingDensity: 0, fogDensity: 0.0009, weatherOptions: ['clear', 'cloudy', 'overcast', 'rain', 'storm'] }),
+    points: sepangPoints.points as [number, number, number][],
+    halfWidths: sepangPoints.halfWidths,
+    features: [
+      ...(sepangPoints.features as { type: 'pit'; from: number; to: number; side: 1 | -1 }[]),
       { type: 'sector', at: 0.33 },
       { type: 'sector', at: 0.66 },
     ],

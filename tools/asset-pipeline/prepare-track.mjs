@@ -119,23 +119,26 @@ const TRACKS = {
     noShadow: /_77$|^Merged_materials|_3$|_4$|_18$|_13$|_73$|_84$|_39$|_40$|_79$|_80$|_96$|_58$|_23$|_25$/,
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
+  // Skipped (2026-09-09): at the start/finish the pit-exit tunnel road and the track share
+  // material tentrail_32 and overlap in plan, the track surface is missing at the line and the
+  // traced line drops into the tunnel; the rest of the lap traces (5339 m at 1.926 scale).
   yas: {
     source: 'assets-src/models/tracks/yas_marina_circuit_abu_dhabi_2021_layout/scene.gltf',
     output: 'public/assets/models/tracks/yas.glb',
     pointsOut: 'src/game/tracks/data/yas.points.json',
     credit: 'Yas Marina Circuit Abu Dhabi 2021 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
-    scale: 1,
+    scale: 1.926, // the export is ~52 % size: 2742 m traced at 1:1 against the real 5281 m lap
     yawDeg: 0,
     direction: 'ccw',
     controlSpacing: 10,
+    tracer: 'skeleton', // the band method locks onto a thin pocket between the parallel straights
     startMarker: /tentrail_45$/, // an 8 m cube with the start-gantry light board texture
     // A ripped export: material names are numbers, read off the texture contact sheet and material mini-maps.
     rules: [
       { cls: 'road', material: /tentrail_32$/ }, // the track
-      { cls: 'road', material: /tentrail_28$|tentrail_29$|tentrail_19$/, lap: 'near' }, // asphalt run-off and aprons
-      { cls: 'pit', material: /tentrail_58$/ },
+      // tentrail_19, _28, _29 and _58 are decks and roofs 3–5 m above the track around the pits, not run-off: props
       { cls: 'kerb', material: /tentrail_21$|tentrail_20$|tentrail_66$/ },
-      { cls: 'runoff', material: /tentrail_31$|tentrail_34$/ }, // blue and white painted run-off
+      // tentrail_31 (blue) and _34 (white) looked like painted run-off but are 5–8 m tall cladding: props
       { cls: 'overlay', material: /tentrail_30$|tentrail_87$|tentrail_16$/ }, // edge lines, skid marks, markings
       { cls: 'gravel', material: /tentrail_11$|tentrail_26$/ }, // sand
       { cls: 'terrain', material: /tentrail_69$|tentrail_25$/ },
@@ -143,6 +146,132 @@ const TRACKS = {
     ],
     decimate: { wall: 0.4, prop: 0.5, terrain: 0.7 },
     noShadow: /tentrail_57$|^Merged_materials|tentrail_89$|tentrail_86$|tentrail_69$|tentrail_25$|tentrail_11$|tentrail_26$|tentrail_72$|tentrail_73$|tentrail_75$|tentrail_42$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  shanghai: {
+    source: 'assets-src/models/tracks/shanghai_international_circuit_2018_layout/scene.gltf',
+    output: 'public/assets/models/tracks/shanghai.glb',
+    pointsOut: 'src/game/tracks/data/shanghai.points.json',
+    credit: 'Shanghai International Circuit 2018 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'cw',
+    controlSpacing: 10,
+    // A ripped export whose materials are all called advert_side_a_N: read off flatmats.mjs,
+    // matmaps.mjs and the texture sheet.
+    rules: [
+      { cls: 'road', material: /advert_side_a_22$/ }, // the track
+      { cls: 'pit', material: /advert_side_a_23$/ }, // pit lane concrete
+      { cls: 'kerb', material: /advert_side_a_12$/ },
+      { cls: 'runoff', material: /advert_side_a_13$|advert_side_a_86$|advert_side_a_14$/ }, // light concrete run-off, rubbered asphalt run-off, paddock floor
+      { cls: 'gravel', material: /advert_side_a_81$|advert_side_a_80$/ },
+      { cls: 'terrain', material: /advert_side_a_82$|advert_side_a_79$|advert_side_a_11$|advert_side_a_15$|advert_side_a_19$|advert_side_a_29$/ }, // grass, verges, lakes
+      { cls: 'overlay', material: /advert_side_a_66$|advert_side_a_77$|advert_side_a_62$|advert_side_a_61$|advert_side_a_65$|advert_side_a_64$/ }, // edge shadows, lines, strips, decals
+      { cls: 'wall', material: /advert_side_a_9$|advert_side_a_48$|advert_side_a_44$|advert_side_a_17$|advert_side_a_37$|advert_side_a_50$|advert_side_a_68$|advert_side_a_88$|advert_side_a_96$|advert_side_a_76$|advert_side_a_56$|advert_side_a_58$|advert_side_a_16$/ }, // tyre stacks, fence posts, armco, concrete walls, pit wall, catch fencing, railings
+    ],
+    decimate: { wall: 0.15, prop: 0.5, terrain: 0.7 },
+    noShadow: /advert_side_a_82$|advert_side_a_79$|advert_side_a_11$|advert_side_a_15$|advert_side_a_19$|advert_side_a_29$|advert_side_a_66$|advert_side_a_64$|advert_side_a_65$|advert_side_a_9$|advert_side_a_81$|advert_side_a_80$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  marina: {
+    source: 'assets-src/models/tracks/marina_bay_street_circuit/scene.gltf',
+    output: 'public/assets/models/tracks/marina.glb',
+    pointsOut: 'src/game/tracks/data/marina.points.json',
+    credit: 'Marina Bay Street Circuit by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'ccw',
+    controlSpacing: 10,
+    tracer: 'skeleton',
+    // Street circuit: the track is one asphalt material threading a city of a hundred
+    // building materials; barriers are concrete blocks with light rigs on top.
+    rules: [
+      { cls: 'road', material: /^11001Mtl_15$/ }, // the track
+      { cls: 'runoff', material: /^11001Mtl_96$/ }, // pavements and service asphalt beside the track
+      { cls: 'overlay', material: /^11001Mtl_92$|^11001Mtl_3$|^11001Mtl_14$/ }, // edge shadows, paving grid, road-marking sheets (also the flyover deck)
+      { cls: 'terrain', material: /^11001Mtl$|^11001Mtl_94$|^11001Mtl_95$/ }, // sea, city ground, grass
+      { cls: 'wall', material: /^11001Mtl_76$|^11001Mtl_18$|^11001Mtl_71$|^11001Mtl_72$|^11001Mtl_73$|^11001Mtl_93$|^11001Mtl_74$|^11001Mtl_75$/ }, // concrete barriers with light rigs, barrier blocks, catch fences, fence screens
+    ],
+    decimate: { wall: 0.4, prop: 0.4, terrain: 0.5 },
+    noShadow: /^11001Mtl$|^11001Mtl_94$|^11001Mtl_95$|^11001Mtl_92$|^11001Mtl_3$|^11001Mtl_14$|^11001Mtl_93$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  suzuka: {
+    source: 'assets-src/models/tracks/suzuka_circuit_2001_layout/scene.gltf',
+    output: 'public/assets/models/tracks/suzuka.glb',
+    pointsOut: 'src/game/tracks/data/suzuka.points.json',
+    credit: 'Suzuka Circuit 2001 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'cw',
+    controlSpacing: 10,
+    tracer: 'skeleton',
+    crossings: [[-138, -164]], // the figure-eight overpass: pass straight through, twice
+    rules: [
+      { cls: 'road', material: /^282_69$/ }, // the track (edge lines baked in)
+      { cls: 'road', material: /^282_66$/, lap: 'near' }, // pit exit / link roads
+      { cls: 'pit', material: /^282_64$/ }, // pit lane with its bay markings
+      { cls: 'kerb', material: /^282_10$/ },
+      { cls: 'runoff', material: /^282_65$|^282_3$|^282_59$/ }, // paddock asphalt, pit apron, concrete run-off
+      { cls: 'overlay', material: /^282_94$|^282_92$|^282_28$|^282_93$|^282_61$/ }, // groove, skid marks, decals, edge strips
+      { cls: 'terrain', material: /^282_60$|^282_62$|^282_57$|^282_58$|^282_56$|^material$|^282_29$/ }, // grass, verges, lake, hills
+      { cls: 'wall', material: /^282_6$|^282_1$|^282_96$|^282_85$|^282_7$|^282_8$|^282_41$|^282_73$|^282_74$|^282_37$|^282_90$/ }, // tyre stacks, concrete walls, catch fences, armco, blocks, screens
+    ],
+    decimate: { wall: 0.5, prop: 0.5, terrain: 0.7 },
+    noShadow: /^282_60$|^282_62$|^282_57$|^282_58$|^282_56$|^material$|^282_29$|^282_94$|^282_92$|^282_28$|^282_93$|^282_61$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  indianapolis: {
+    source: 'assets-src/models/tracks/indianapolis_motor_speedway/scene.gltf',
+    output: 'public/assets/models/tracks/indianapolis.glb',
+    pointsOut: 'src/game/tracks/data/indianapolis.points.json',
+    credit: 'Indianapolis Motor Speedway by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1,
+    yawDeg: 0,
+    direction: 'ccw',
+    controlSpacing: 10,
+    // The oval is the lap; the infield road course stays drivable asphalt but is not traced
+    // (the largest cycle is the oval anyway).
+    rules: [
+      { cls: 'road', material: /standard_20\.004_9$/ }, // the oval
+      { cls: 'road', material: /standard_20\.004_16$|standard_20\.004_7$/, lap: 'near' }, // infield road course
+      { cls: 'pit', material: /standard_20\.004_10$/ }, // cracked concrete pit lane / apron
+      { cls: 'gravel', material: /standard_20\.004_34$/ },
+      { cls: 'terrain', material: /standard_20\.004_31$|standard_20\.004_90$|standard_20\.004_30$|standard_20\.004_13$/ }, // infield grass, surroundings, verge strips
+      { cls: 'overlay', material: /standard_20\.004_8$|standard_20\.004_22$/ }, // edge lines, drains
+      { cls: 'wall', material: /standard_20\.004_89$|standard_20\.004_46$|standard_20\.004_37$|standard_20\.004_43$|standard_20\.004_67$|standard_20\.004_38$|standard_20\.004_39$/ }, // armco, SAFER walls, catch fences, tyre stacks
+    ],
+    decimate: { wall: 0.3, prop: 0.4, terrain: 0.5 },
+    noShadow: /standard_20\.004_31$|standard_20\.004_90$|standard_20\.004_30$|standard_20\.004_13$|standard_20\.004_8$|standard_20\.004_22$|standard_20\.004_65$/,
+    textures: { color: 2048, normal: 1024, other: 1024 },
+  },
+  sepang: {
+    source: 'assets-src/models/tracks/sepang_international_circuit_2025_layout/scene.gltf',
+    output: 'public/assets/models/tracks/sepang.glb',
+    pointsOut: 'src/game/tracks/data/sepang.points.json',
+    credit: 'Sepang International Circuit 2025 layout by Dave Love SketchFab (sketchfab.com/Tyler_Dave), CC-BY 4.0',
+    scale: 1, // the full lap traces at 5533 m against the real 5543 m
+    yawDeg: 0,
+    direction: 'cw',
+    controlSpacing: 10,
+    startMarker: /Sepang691Mtl_50$/, // the checkered start-line block
+    tracer: 'skeleton', // two lobes joined by parallel straights: the band picks one lobe, the largest cycle is the lap
+    res: 1, // half-widths to ±0.5 m: at 2 m the AI line sat on T7's inside kerb
+    // A ripped export: material names are numbers, read off the texture contact sheet and material mini-maps.
+    rules: [
+      { cls: 'road', material: /Sepang691Mtl_22$/ }, // the track
+      { cls: 'road', material: /Sepang691Mtl_70$|Sepang691Mtl_97$/, lap: 'near' }, // asphalt run-off
+      { cls: 'pit', material: /Sepang691Mtl$|Sepang691Mtl_1$/ }, // concrete pit lane + blue pit-box floors along the main straight
+      { cls: 'kerb', material: /Sepang691Mtl_90$|Sepang691Mtl_54$/ },
+      { cls: 'runoff', material: /Sepang691Mtl_57$|Sepang691Mtl_82$|Sepang691Mtl_2$|Sepang691Mtl_96$|Sepang691Mtl_81$|Sepang691Mtl_91$|Sepang691Mtl_89$|Sepang691Mtl_84$/ }, // painted run-off, the service strip beside the back straight, coloured paint areas, ground-painted sponsor logos and boards, concrete pads, the grass-textured hump strips that cross T1's asphalt
+      { cls: 'drop', material: /Sepang691Mtl_5$/ }, // circuit-wide alpha-0 mesh (invisible)
+      { cls: 'overlay', material: /Sepang691Mtl_83$|Sepang691Mtl_85$|Sepang691Mtl_20$|Sepang691Mtl_87$|Sepang691Mtl_19$|Sepang691Mtl_86$/ }, // edge strips, skid marks, markings, sponsor decals, shadow gradients
+      { cls: 'gravel', material: /Sepang691Mtl_6$/ },
+      { cls: 'terrain', material: /Sepang691Mtl_0$|Sepang691Mtl_71$|Sepang691Mtl_95$|Sepang691Mtl_94$/ }, // grass, dirt, pavers
+      { cls: 'wall', material: /Sepang691Mtl_39$|Sepang691Mtl_56$|Sepang691Mtl_41$|Sepang691Mtl_40$|Sepang691Mtl_8$|Sepang691Mtl_80$|Sepang691Mtl_72$/ }, // armco, concrete walls, posts, tyre barriers, catch fencing, pit wall, concrete retaining walls
+    ],
+    decimate: { wall: 0.4, prop: 0.5, terrain: 0.7 },
+    noShadow: /Sepang691Mtl_21$|Sepang691Mtl_0$|Sepang691Mtl_71$|Sepang691Mtl_95$|Sepang691Mtl_94$|Sepang691Mtl_6$|Sepang691Mtl_8$|Sepang691Mtl_3$|Sepang691Mtl_16$|Sepang691Mtl_14$|Sepang691Mtl_7$|Sepang691Mtl_86$|Sepang691Mtl_80$/,
     textures: { color: 2048, normal: 1024, other: 1024 },
   },
   spa: {
@@ -204,6 +333,7 @@ function walk(node, parentPath) {
       const matName = prim.getMaterial()?.getName() ?? ''
       const rule = cfg.rules.find((r) => (r.path && r.path.test(pathStr)) || (r.material && r.material.test(matName)))
       const cls = rule ? rule.cls : 'prop'
+      if (cls === 'drop') continue // invisible collision/helper meshes in the export
       if (!CLASSES.includes(cls)) throw new Error(`bad class ${cls}`)
       prims.push({ prim, cls, pathStr, matName, world, lap: rule?.lap === undefined ? true : rule.lap, noShadow: !!(cfg.noShadow && (cfg.noShadow.test(matName) || cfg.noShadow.test(pathStr))) })
     }
@@ -273,6 +403,35 @@ const rasterise = (tris) => {
 const heightGrid = new Float32Array(GW * GH).fill(NaN)
 for (const tri of coreTris) for (const [x, y, z] of tri) heightGrid[cellZ(z) * GW + cellX(x)] = y
 const roadHeightNear = (x, z) => { for (let r = 0; r <= 3; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) { if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; const X = x + dx, Z = z + dz; if (X >= 0 && Z >= 0 && X < GW && Z < GH && Number.isFinite(heightGrid[Z * GW + X])) return heightGrid[Z * GW + X] } return NaN }
+// Highest surface per cell (plane-interpolated), NaN where nothing covers the cell centre.
+const rasteriseTop = (tris) => {
+  const g = new Float32Array(GW * GH).fill(NaN)
+  for (const tri of tris) {
+    const [p0, p1, p2] = tri
+    const ux = p1[0] - p0[0], uz = p1[2] - p0[2], vx = p2[0] - p0[0], vz = p2[2] - p0[2]
+    const det = ux * vz - uz * vx
+    if (Math.abs(det) < 1e-6) continue
+    const c = tri.map(([x, , z]) => [(x - gx0) / RES, (z - gz0) / RES])
+    const zmin = Math.max(0, Math.ceil(Math.min(c[0][1], c[1][1], c[2][1]))), zmax = Math.min(GH - 1, Math.floor(Math.max(c[0][1], c[1][1], c[2][1])))
+    for (let cz = zmin; cz <= zmax; cz++) {
+      const xs = []
+      for (let e = 0; e < 3; e++) {
+        const a = c[e], b = c[(e + 1) % 3]
+        if ((cz >= a[1] && cz < b[1]) || (cz >= b[1] && cz < a[1])) xs.push(a[0] + ((cz - a[1]) * (b[0] - a[0])) / (b[1] - a[1]))
+      }
+      if (xs.length < 2) continue
+      xs.sort((u, v) => u - v)
+      for (let cx = Math.max(0, Math.ceil(xs[0])); cx <= Math.min(GW - 1, Math.floor(xs[1])); cx++) {
+        const wx = gx0 + cx * RES - p0[0], wz = gz0 + cz * RES - p0[2]
+        const bu = (wx * vz - wz * vx) / det, bv = (ux * wz - uz * wx) / det
+        const y = p0[1] + bu * (p1[1] - p0[1]) + bv * (p2[1] - p0[1])
+        const i = cz * GW + cx
+        if (!(g[i] >= y)) g[i] = y
+      }
+    }
+  }
+  return g
+}
 const rasteriseEdges = (tris, checkHeight = true) => {
   const g = new Uint8Array(GW * GH)
   const mark = (x, z) => { if (x >= 0 && z >= 0 && x < GW && z < GH) g[z * GW + x] = 1 }
@@ -313,6 +472,26 @@ if (cfg.coreClose) { const r = Math.max(1, Math.round(cfg.coreClose / RES)); con
 let fullGrid = rasterise(roadTris)
 fullGrid = morph(fullGrid, (cnt) => cnt > 0)
 fullGrid = morph(fullGrid, (cnt) => cnt === 9)
+let roadTopGrid = null // highest road surface per cell, for the edge walks
+// Verges laid over the asphalt polygon: where a grass strip or gravel sits on top of
+// road triangles (Sepang's T1 apex has a grass verge and a painted logo over the
+// asphalt), the car drives on the verge, so those cells leave the road raster.
+{
+  const coverTris = trisOfPrims(prims.filter((p) => p.cls === 'terrain' || p.cls === 'gravel'))
+  if (coverTris.length) {
+    const roadTop = rasteriseTop(roadTris), coverTop = rasteriseTop(coverTris)
+    roadTopGrid = roadTop
+    let removed = 0
+    if (process.env.DEBUG_WALK) {
+      // cover minus road top in decimetres around the point: digits = cover above (capped 9), letters = cover below, '#' road without cover, '.' nothing
+      const [qx, qz] = process.env.DEBUG_WALK.split(',').map(Number)
+      const cx0 = cellX(qx), cz0 = cellZ(qz), R2 = Math.round(30 / RES)
+      for (let cz = cz0 - R2; cz <= cz0 + R2; cz++) { let row = ''; for (let cx = cx0 - R2; cx <= cx0 + R2; cx++) { const i = cz * GW + cx; let ch = '.'; if (cx >= 0 && cz >= 0 && cx < GW && cz < GH && (grid[i] || fullGrid[i])) { ch = '#'; if (Number.isFinite(coverTop[i]) && Number.isFinite(roadTop[i])) { const d = Math.round((coverTop[i] - roadTop[i]) * 10); ch = d >= 0 ? String(Math.min(9, d)) : String.fromCharCode(96 + Math.min(26, -d)) } } row += ch } console.log('COVER ' + row) }
+    }
+    for (let i = 0; i < grid.length; i++) if ((grid[i] || fullGrid[i]) && coverTop[i] >= roadTop[i] - 0.15) { if (grid[i]) removed++; grid[i] = 0; fullGrid[i] = 0 }
+    console.log(`${removed} core cells under verges or gravel that sit on the asphalt — removed from the road`)
+  }
+}
 const wallGrid = wallTris.length ? rasteriseEdges(wallTris) : null
 // Kerbs are lap surface for tracing, but the usable width the AI gets stops at
 // them: a 3D sausage kerb taken at speed launches a car.
@@ -362,7 +541,7 @@ const findPlug = (g, roadCells) => {
   for (const K of [2, 4, 6, 9, 13, 18]) {
     const gK = dilate(g, Math.max(1, Math.round(K / RES)))
     const { label, best, bestCount } = labelRegions(gK)
-    if (best < 0 || bestCount < 2 * roadCells) continue
+    if (best < 0 || (bestCount < 2 * roadCells && bestCount < 0.02 * N_CELLS)) continue
     const near = (id, cap) => { const d = new Int32Array(N_CELLS).fill(-1); let h = 0, t = 0; for (let i = 0; i < N_CELLS; i++) if (label[i] === id) { d[i] = 0; q[t++] = i } while (h < t) { const c = q[h++]; if (d[c] >= cap) continue; const x = c % GW, z = (c - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const n = Z * GW + X; if (d[n] < 0) { d[n] = d[c] + 1; q[t++] = n } } } return d }
     const cap = Math.round(K / RES) + 3
     const dInf = near(best, cap), dOut = near(1, cap)
@@ -379,7 +558,7 @@ const lapBandOn = (g, allowPlug) => {
   // A circuit's infield is several times its road area; a smaller "infield" is a pocket
   // and the real ring is open somewhere.
   let roadCells = 0; for (let i = 0; i < N_CELLS; i++) roadCells += g[i]
-  const tooSmall = best < 0 || bestCount < 2 * roadCells
+  const tooSmall = best < 0 || (bestCount < 2 * roadCells && bestCount < 0.02 * N_CELLS) || (allowPlug && !!process.env.FORCE_PLUG)
   if (tooSmall && allowPlug) {
     const found = findPlug(g, roadCells)
     if (found && found.plug.length) {
@@ -478,6 +657,53 @@ if (!junctions.length) {
       edgesG.push({ a: j, b: endJ, path })
     }
   }
+  // Parallel roads between the same two junctions — a run-off apron beyond a grass hump
+  // (Sepang's T1), a pit lane, a service road — keep only the widest: the racing surface
+  // is the wide one, and the largest-area rule would otherwise take whichever runs on the
+  // outside. Two lobes of a figure-eight also share their junction but lie far apart, so
+  // only edges within 25 m of each other count as parallel.
+  {
+    const dt = new Float32Array(GW * GH).fill(Infinity)
+    const q = []
+    for (let i = 0; i < GW * GH; i++) if (!fullGrid[i]) { dt[i] = 0; q.push(i) }
+    let head = 0
+    const cap = 15 / RES
+    while (head < q.length) { const i = q[head++]; const d = dt[i]; if (d >= cap) continue; const x = i % GW, z = (i - x) / GW; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Z = z + dz; if (X < 0 || Z < 0 || X >= GW || Z >= GH) continue; const j = Z * GW + X; if (dt[j] > d + 1) { dt[j] = d + 1; q.push(j) } } }
+    const width = (ed) => { let sum = 0; for (const [x, z] of ed.path) sum += dt[z * GW + x]; return (sum / ed.path.length) * RES }
+    const near = (p, qth) => { let sum = 0, n = 0; for (let k = 0; k < p.path.length; k += 5) { let best = Infinity; for (let m = 0; m < qth.path.length; m += 5) best = Math.min(best, dist2(p.path[k], qth.path[m])); sum += Math.min(best, 200); n++ } return (sum / n) * RES }
+    const groups = new Map()
+    edgesG.forEach((ed, i) => { const key = `${Math.min(ed.a, ed.b)},${Math.max(ed.a, ed.b)}`; (groups.get(key) ?? groups.set(key, []).get(key)).push(i) })
+    const dropped = new Set()
+    for (const list of groups.values()) {
+      if (list.length < 2) continue
+      const sorted = list.map((i) => ({ i, w: width(edgesG[i]) })).sort((u, v) => v.w - u.w)
+      for (let k = 1; k < sorted.length; k++) if (near(edgesG[sorted[k].i], edgesG[sorted[0].i]) < 25) { dropped.add(sorted[k].i); console.log(`parallel road ${sorted[k].w.toFixed(1)} m wide beside one ${sorted[0].w.toFixed(1)} m wide — dropped`) }
+    }
+    if (dropped.size) { const kept = edgesG.filter((_, i) => !dropped.has(i)); edgesG.length = 0; edgesG.push(...kept) }
+  }
+  // Figure-eight crossings: a bridge over the lap reads as one 4-way junction (or two
+  // close 3-way ones) and no simple cycle can pass it twice, so the largest cycle would be
+  // a single lobe. Pair each arm with the arm opposite it and split the junction so the
+  // loop goes straight through — a topology hint from the config, not a hand-authored line.
+  for (const [wx, wz] of cfg.crossings ?? []) {
+    const near = new Set()
+    junctions.forEach((jn, i) => { const c = jn.pixels.reduce((s, p) => [s[0] + p[0], s[1] + p[1]], [0, 0]).map((v) => v / jn.pixels.length); if (Math.hypot(gx0 + c[0] * RES - wx, gz0 + c[1] * RES - wz) < 25) near.add(i) })
+    if (!near.size) { console.log(`crossing ${wx},${wz}: no junction within 25 m — ignored`); continue }
+    const J = [...near][0]
+    for (let i = edgesG.length - 1; i >= 0; i--) { const ed = edgesG[i]; if (near.has(ed.a) && near.has(ed.b)) { edgesG.splice(i, 1); continue } if (near.has(ed.a)) ed.a = J; if (near.has(ed.b)) ed.b = J }
+    const ends = []
+    edgesG.forEach((ed, i) => { if (ed.a === J) ends.push({ i, end: 'a' }); if (ed.b === J) ends.push({ i, end: 'b' }) })
+    if (ends.length !== 4) { console.log(`crossing ${wx},${wz}: ${ends.length} arms at the junction — not split`); continue }
+    const dir = ({ i, end }) => { const p = end === 'a' ? edgesG[i].path : [...edgesG[i].path].reverse(); const k = Math.min(p.length - 1, Math.round(8 / RES)); const dx = p[k][0] - p[0][0], dz = p[k][1] - p[0][1], n = Math.hypot(dx, dz) || 1; return [dx / n, dz / n] }
+    const d = ends.map(dir)
+    const dot = (u, v) => d[u][0] * d[v][0] + d[u][1] * d[v][1]
+    const pairings = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]]
+    const pr = pairings.sort((p, q) => (dot(...p[0]) + dot(...p[1])) - (dot(...q[0]) + dot(...q[1])))[0]
+    const J2 = junctions.length
+    junctions.push({ pixels: junctions[J].pixels })
+    for (const k of pr[1]) { const { i, end } = ends[k]; edgesG[i][end] = J2 }
+    console.log(`crossing ${wx},${wz}: junction split into two straight-through passes`)
+  }
   const cycles = []
   const dfs = (startNode, node, usedEdges, visitedNodes, order) => {
     for (let e = 0; e < edgesG.length; e++) {
@@ -508,9 +734,12 @@ if (!junctions.length) {
   }
   const dd = new Map()
   for (const c of cycles) dd.set([...c].sort((u, v) => u - v).join(','), c)
-  const ranked = [...dd.values()].map((c) => toPoly(c)).map((poly) => ({ poly, area: area(poly) })).sort((u, v) => v.area - u.area)
+  // A figure-eight's lobes wind in opposite directions and cancel in the shoelace sum,
+  // so with crossings configured the lap is the longest simple cycle instead.
+  const plen = (poly) => { let l = 0; for (let i = 0; i < poly.length; i++) l += dist2(poly[i], poly[(i + 1) % poly.length]); return l }
+  const ranked = [...dd.values()].map((c) => toPoly(c)).map((poly) => ({ poly, area: area(poly), len: plen(poly) })).sort((u, v) => (cfg.crossings ? v.len - u.len : v.area - u.area))
   if (!ranked.length) throw new Error('the lap surface skeleton has no cycle — the road does not close')
-  console.log(`skeleton ${skelCells} cells (${pruned} dead-end cells pruned), ${junctions.length} junctions, ${edgesG.length} edges, ${ranked.length} cycles; largest ${Math.round(ranked[0].area * RES * RES)} m²`)
+  console.log(`skeleton ${skelCells} cells (${pruned} dead-end cells pruned), ${junctions.length} junctions, ${edgesG.length} edges, ${ranked.length} cycles; largest ${Math.round(ranked[0].area * RES * RES)} m², ${Math.round(ranked[0].len * RES)} m long`)
   cyclePaths = ranked.map((r) => r.poly)
 }
 let mid = cyclePaths[0].map(([x, z]) => [gx0 + x * RES, gz0 + z * RES])
@@ -543,8 +772,14 @@ let { points: line, length } = resample(mid, 2)
 const normalAt = (pts, i) => { const a = pts[(i - 1 + pts.length) % pts.length], b = pts[(i + 1) % pts.length]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [-(b[1] - a[1]) / L, (b[0] - a[0]) / L] }
 // The full asphalt may only extend the core (groove) edge by a road margin — a
 // side road or apron joining at a junction must not pull the line sideways.
-const walkGrid = (g, p, nx, nz, sign, max, stopKerbs = false) => { let d = 0; for (let t = 0.5; t <= max; t += 0.5) { const cx = cellX(p[0] + nx * sign * t), cz = cellZ(p[1] + nz * sign * t); if (!at(g, cx, cz) || (wallGrid && at(wallGrid, cx, cz)) || (stopKerbs && kerbGrid && at(kerbGrid, cx, cz))) break; d = t } return d }
-const walkFrom = (p, nx, nz, sign, stopKerbs = false) => { const core = walkGrid(grid, p, nx, nz, sign, 9); return walkGrid(fullGrid, p, nx, nz, sign, Math.min(9, core + 6), stopKerbs) }
+// An edge walk also stops where the asphalt steps down by 8 cm or more within half a
+// metre: a lower run-off sheet beside the road (Sepang's T1 apron, 20 cm under the
+// track past a grass hump) is not road for centring or width. Banking drops a couple
+// of centimetres per half metre and passes.
+const walkGrid = (g, p, nx, nz, sign, max, stopKerbs = false) => { let d = 0, prevTop = NaN; for (let t = 0.5; t <= max; t += 0.5) { const cx = cellX(p[0] + nx * sign * t), cz = cellZ(p[1] + nz * sign * t); if (!at(g, cx, cz) || (wallGrid && at(wallGrid, cx, cz)) || (stopKerbs && kerbGrid && at(kerbGrid, cx, cz))) break; if (roadTopGrid && cx >= 0 && cz >= 0 && cx < GW && cz < GH) { const top = roadTopGrid[cz * GW + cx]; if (Number.isFinite(top)) { if (Number.isFinite(prevTop) && prevTop - top > 0.08) break; prevTop = top } } d = t } return d }
+// Walks reach 14 m: a hairpin with run-off asphalt on the outside (Sepang's T1) is 20 m
+// wide, and a walk capped short of the far edge cannot centre the line at all.
+const walkFrom = (p, nx, nz, sign, stopKerbs = false) => { const core = walkGrid(grid, p, nx, nz, sign, 14); return walkGrid(fullGrid, p, nx, nz, sign, Math.min(14, core + 6), stopKerbs) }
 const medianFilter = (arr, k) => arr.map((_, i) => { const w = []; for (let d = -k; d <= k; d++) w.push(arr[(i + d + arr.length) % arr.length]); w.sort((a, b) => a - b); return w[k] })
 const meanFilter = (arr, k) => arr.map((_, i) => { let s = 0; for (let d = -k; d <= k; d++) s += arr[(i + d + arr.length) % arr.length]; return s / (2 * k + 1) })
 let halfWidths = null
@@ -552,8 +787,19 @@ const walkDebug = []
 if (nearTris.length || wallGrid) {
   const n = line.length
   const left = new Array(n), right = new Array(n)
-  for (let i = 0; i < n; i++) { const [nx, nz] = normalAt(line, i); left[i] = walkFrom(line[i], nx, nz, -1); right[i] = walkFrom(line[i], nx, nz, 1) }
-  const shift = meanFilter(medianFilter(left.map((l, i) => Math.max(-4, Math.min(4, (right[i] - l) / 2))), 12), 4)
+  // Kerbs mark the road's edges on a real circuit: centre between them, not across the
+  // aprons and second surface layers beyond them (Sepang's T1 has a lower asphalt sheet
+  // reaching 12 m inside the kerb, which pulled the line onto the grass verge).
+  for (let i = 0; i < n; i++) { const [nx, nz] = normalAt(line, i); left[i] = walkFrom(line[i], nx, nz, -1, true); right[i] = walkFrom(line[i], nx, nz, 1, true) }
+  const shift = meanFilter(medianFilter(left.map((l, i) => Math.max(-6, Math.min(6, (right[i] - l) / 2))), 12), 4)
+  if (process.env.DEBUG_WALK) {
+    // ASCII raster around the point: # core, + road beyond the core, K kerb, W wall, * skeleton, . nothing
+    const [qx, qz] = process.env.DEBUG_WALK.split(',').map(Number)
+    const cx0 = cellX(qx), cz0 = cellZ(qz), R2 = Math.round(30 / RES)
+    const onLine = new Set(line.map((p) => `${cellX(p[0])},${cellZ(p[1])}`))
+    for (let cz = cz0 - R2; cz <= cz0 + R2; cz++) { let row = ''; for (let cx = cx0 - R2; cx <= cx0 + R2; cx++) { let ch = at(grid, cx, cz) ? '#' : at(fullGrid, cx, cz) ? '+' : '.'; if (kerbGrid && at(kerbGrid, cx, cz)) ch = 'K'; if (wallGrid && at(wallGrid, cx, cz)) ch = 'W'; if (onLine.has(`${cx},${cz}`)) ch = 'o'; row += ch } console.log(row) }
+  }
+  if (process.env.DEBUG_WALK) { const [qx, qz] = process.env.DEBUG_WALK.split(',').map(Number); let bi = 0, bd = Infinity; line.forEach((p, k) => { const d = Math.hypot(p[0] - qx, p[1] - qz); if (d < bd) { bd = d; bi = k } }); const o = []; for (let k = bi - 8; k <= bi + 8; k++) { const i = (k + n) % n; o.push(`${i}:L${left[i]}/R${right[i]}/s${shift[i].toFixed(1)}`) } console.log('DEBUG_SHIFT', o.join(' ')) }
   line = line.map((p, i) => { const [nx, nz] = normalAt(line, i); return [p[0] + nx * shift[i], p[1] + nz * shift[i]] })
   line = smooth(line, 2)
   ;({ points: line, length } = resample(line, 2))
@@ -614,9 +860,12 @@ for (const tri of roadTris) {
   const xs = tri.map((v) => v[0]), zs = tri.map((v) => v[2])
   for (let cx = Math.floor(Math.min(...xs) / TC); cx <= Math.floor(Math.max(...xs) / TC); cx++) for (let cz = Math.floor(Math.min(...zs) / TC); cz <= Math.floor(Math.max(...zs) / TC); cz++) { const k = `${cx},${cz}`; (tgrid.get(k) ?? tgrid.set(k, []).get(k)).push(tri) }
 }
-const heightAt = ([x, z]) => {
+// All road surfaces under a point: the heights of every containing triangle (the
+// nearest vertex within 12 m when none contains it).
+const heightsAt = ([x, z]) => {
   const k = `${Math.floor(x / TC)},${Math.floor(z / TC)}`
   let best = null, bestD = Infinity
+  const tops = []
   for (const tri of tgrid.get(k) ?? []) {
     const [a, b, c] = tri
     const d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2])
@@ -624,12 +873,28 @@ const heightAt = ([x, z]) => {
     const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d
     const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d
     const l3 = 1 - l1 - l2
-    if (l1 >= -0.02 && l2 >= -0.02 && l3 >= -0.02) return l1 * a[1] + l2 * b[1] + l3 * c[1]
+    if (l1 >= -0.02 && l2 >= -0.02 && l3 >= -0.02) { tops.push(l1 * a[1] + l2 * b[1] + l3 * c[1]); continue }
     for (const v of tri) { const dv = Math.hypot(v[0] - x, v[2] - z); if (dv < bestD) { bestD = dv; best = v[1] } }
   }
-  return bestD < 12 ? best : null
+  if (tops.length) return tops
+  return bestD < 12 ? [best] : []
 }
-let ys = line.map(heightAt)
+// Where a bridge or a pit-exit tunnel crosses the track in the same material, a point
+// has several surfaces; the lap keeps the one continuous with its neighbours. Two
+// passes around the closed loop so the arbitrary first choice cannot stick.
+const levelHeights = (pts) => {
+  const opts = pts.map(heightsAt)
+  let prev = opts[0].length ? Math.max(...opts[0]) : 0
+  const out = new Array(pts.length).fill(null)
+  for (let pass = 0; pass < 2; pass++) for (let i = 0; i < pts.length; i++) {
+    const o = opts[i]
+    if (!o.length) { out[i] = null; continue }
+    let pick = o[0]; for (const y of o) if (Math.abs(y - prev) < Math.abs(pick - prev)) pick = y
+    out[i] = pick; prev = pick
+  }
+  return out
+}
+let ys = levelHeights(line)
 let missing = 0
 for (let i = 0; i < ys.length; i++) if (ys[i] === null) { missing++; let j = 1; while (j < ys.length && ys[(i + j) % ys.length] === null) j++; ys[i] = ys[(i + j) % ys.length] ?? 0 }
 ys = ys.map((_, i) => { let s = 0; for (let d = -2; d <= 2; d++) s += ys[(i + d + ys.length) % ys.length]; return s / 5 })

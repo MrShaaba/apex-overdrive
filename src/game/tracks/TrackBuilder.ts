@@ -416,7 +416,9 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
           physics.world.intersectionsWithRay(new R.Ray({ x, y: top, z }, { x: 0, y: -1, z: 0 }), 60, true, (h) => {
             const meta = physics.getMeta(h.collider.handle)
             const y = top - h.timeOfImpact
-            if (meta?.surface && !meta.wall && Math.abs(y - s.position.y) < 6) hits.push({ y, surface: meta.surface })
+            // A deck or roof classed as road must not become the net: nothing more than
+            // 2 m from the spline's own height counts (banking within ±8 m stays under that).
+            if (meta?.surface && !meta.wall && Math.abs(y - s.position.y) < 2) hits.push({ y, surface: meta.surface })
             return true
           }, undefined, rayGroups)
           hits.sort((a, b) => b.y - a.y)
@@ -465,6 +467,58 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
       netGeo.setIndex(new THREE.BufferAttribute(index, 1))
       addTrimeshCollider(physics, netGeo, 'asphalt')
       netGeo.dispose()
+    }
+    // Hole net: circuit exports have gaps between meshes and ground that never got
+    // geometry (logos painted on nothing, run-off sheets that stop short of the terrain).
+    // Beyond the smoothing net a coarse invisible grass sheet follows the real ground
+    // 30 cm below it and bridges holes 30 cm under the spline, so a car that leaves the
+    // road drops centimetres onto grass instead of fifteen metres onto the apron.
+    {
+      const R = physics.RAPIER
+      physics.world.updateSceneQueries()
+      const rayGroups = makeGroups(CollisionGroup.VEHICLE, CollisionGroup.GROUND)
+      const lats: number[] = []
+      for (let l = -44; l <= 44; l += 4) lats.push(l)
+      const rowIdx: number[] = []
+      for (let i = 0; i < spline.samples.length; i += 2) rowIdx.push(i)
+      const rows = rowIdx.length, cols = lats.length
+      const verts = new Float32Array(rows * cols * 3)
+      let holes = 0
+      for (let r = 0; r < rows; r++) {
+        const s = spline.samples[rowIdx[r]]
+        for (let j = 0; j < cols; j++) {
+          const x = s.position.x + s.right.x * lats[j], z = s.position.z + s.right.z * lats[j]
+          const top = s.position.y + 40
+          let ground = NaN
+          physics.world.intersectionsWithRay(new R.Ray({ x, y: top, z }, { x: 0, y: -1, z: 0 }), 80, true, (h) => {
+            const meta = physics.getMeta(h.collider.handle)
+            const y = top - h.timeOfImpact
+            if (meta?.surface && !meta.wall && Math.abs(y - s.position.y) < 8 && !(ground >= y)) ground = y
+            return true
+          }, undefined, rayGroups)
+          if (!Number.isFinite(ground)) holes++
+          const o = (r * cols + j) * 3
+          verts[o] = x
+          verts[o + 1] = (Number.isFinite(ground) ? ground : s.position.y) - 0.3
+          verts[o + 2] = z
+        }
+      }
+      const rowCount = def.closed ? rows : rows - 1
+      const index = new Uint32Array(rowCount * (cols - 1) * 6)
+      let k = 0
+      for (let r = 0; r < rowCount; r++) {
+        const a = r * cols, b = ((r + 1) % rows) * cols
+        for (let j = 0; j < cols - 1; j++) {
+          index[k++] = a + j; index[k++] = b + j; index[k++] = a + j + 1
+          index[k++] = a + j + 1; index[k++] = b + j; index[k++] = b + j + 1
+        }
+      }
+      const holeGeo = new THREE.BufferGeometry()
+      holeGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3))
+      holeGeo.setIndex(new THREE.BufferAttribute(index, 1))
+      addTrimeshCollider(physics, holeGeo, 'grass')
+      holeGeo.dispose()
+      if (holes) console.info(`[Track] hole net bridged ${holes} of ${rows * cols} cells with no ground under them`)
     }
   }
 

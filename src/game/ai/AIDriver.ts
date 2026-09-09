@@ -77,7 +77,17 @@ export class AIDriver {
   private wrongWayTimer = 0
   private boostCooldown = 4
   private rng: () => number
+  /**
+   * Tyre grip the AI plans with, as a multiple of the racing line's 0.78 g
+   * reference, before downforce. Derated (μ^0.45) because the physics' load
+   * transfer and combined slip eat a growing share of high-grip tyres at the
+   * limit: planning with the W13's raw 1.5 spun it in Sepang's hairpins, 1.3 held.
+   */
   gripFactor: number
+  /** Downforce as a fraction of weight per (m/s)², matching VehicleController's v² law. */
+  private downforcePerG: number
+  /** Ceiling on the estimate: what full lock may ask for at speed (VehicleController.steeringLimit) and the flat estimate fast corners were tuned with. */
+  private gripCap: number
   /** Public for UI/debug: current intent. */
   intent: 'racing' | 'overtaking' | 'defending' | 'recovering' | 'mistake' = 'racing'
 
@@ -90,8 +100,24 @@ export class AIDriver {
     this.progressIndex = startIndex
     this.rng = () => Math.random()
     const s = vehicle.spec
-    this.gripFactor = ((s.tires.gripFront + s.tires.gripRear) / 2) * (1 + (s.aero.downforceFront + s.aero.downforceRear) / s.mass * 12)
+    const mu = (s.tires.gripFront + s.tires.gripRear) / 2
+    this.gripFactor = Math.pow(mu, 0.45)
+    this.downforcePerG = (s.aero.downforceFront + s.aero.downforceRear) / (s.mass * 9.81)
+    // Never plan more than the old flat estimate did: fast corners were tuned with it.
+    this.gripCap = Math.min((mu * (1.35 - s.steering.speedSensitivity * 0.5) * 0.9) / 0.78, mu * (1 + ((s.aero.downforceFront + s.aero.downforceRear) / s.mass) * 12))
     this.progress = line.spline.samples[startIndex]?.distance ?? 0
+  }
+
+  /** Lateral grip available at speed `v` (m/s) as a multiple of the line's 0.78 g reference. */
+  gripAt(v: number): number {
+    return Math.min(this.gripCap, this.gripFactor * (1 + this.downforcePerG * v * v))
+  }
+
+  /** Cornering speed the AI plans for where the line's reference speed is `refV`: the
+   *  downforce term depends on the speed it settles at, so iterate once. */
+  plannedSpeed(refV: number, scale: number): number {
+    const v1 = refV * Math.sqrt(this.gripAt(refV))
+    return refV * Math.sqrt(this.gripAt(v1)) * scale
   }
 
   update(dt: number, ctx: AIContext): VehicleInput {
@@ -192,7 +218,7 @@ export class AIDriver {
     const weatherPenalty = 1 - ctx.wetness * 0.22 - ctx.snow * 0.4
     const damagePenalty = 1 - v.getDamage() * 0.25
     const paceScale = lerp(0.72, 1.0, skill) * weatherPenalty * damagePenalty
-    const gripScaleForSpeed = Math.sqrt(this.gripFactor) * v.gripScale
+    const gripScaleForSpeed = v.gripScale
 
     // --- Catch-up / rubber-band ------------------------------------------------
     const half = ctx.trackLength / 2
@@ -285,7 +311,10 @@ export class AIDriver {
     }
 
     // --- Steering: pure pursuit ------------------------------------------------------
-    const lookAhead = 9 + absSpeed * lerp(0.42, 0.3, skill)
+    // Far off the line (after an excursion) aim further ahead so the car rejoins at a
+    // shallow angle instead of darting across the road at speed.
+    const offLine = Math.abs(this.lateral - (this.line.offsets[this.progressIndex] ?? 0))
+    const lookAhead = 9 + absSpeed * lerp(0.42, 0.3, skill) + Math.min(60, Math.max(0, offLine - 2) * 4)
     const lookIndex = this.progressIndex + Math.round(lookAhead / 2)
     this.line.targetAt(lookIndex, startPhase ? 0 : this.lateralBias, _target)
     _toTarget.copy(_target).sub(pos)
@@ -297,7 +326,7 @@ export class AIDriver {
     // Pure pursuit: curvature needed to reach the target, capped by achievable lateral acceleration.
     const dist = Math.max(3, _toTarget.length())
     let curvature = (2 * Math.sin(angle)) / dist
-    const aLatMax = 9.81 * this.gripFactor * lerp(0.55, 0.82, skill) * weatherPenalty * v.gripScale
+    const aLatMax = 9.81 * this.gripAt(absSpeed) * lerp(0.55, 0.82, skill) * weatherPenalty * v.gripScale
     const kMax = aLatMax / Math.max(25, absSpeed * absSpeed)
     curvature = clamp(curvature, -kMax, kMax)
     const wantedLock = Math.atan(v.spec.body.wheelbase * curvature)
@@ -324,14 +353,15 @@ export class AIDriver {
       const idx = spline.wrapIndex(this.progressIndex + k)
       const dist = k * 2
       // Braking-distance aware: allow higher speed for far corners.
-      const refV = this.line.referenceSpeed[idx] * gripScaleForSpeed * paceScale
+      const refV = this.plannedSpeed(this.line.referenceSpeed[idx], gripScaleForSpeed * paceScale)
       const brakeAccel = 8.5 * skill * v.gripScale * weatherPenalty
       const allowed = Math.sqrt(refV * refV + 2 * brakeAccel * dist)
       targetSpeed = Math.min(targetSpeed, allowed)
     }
     void aheadIndex
     targetSpeed = Math.min(targetSpeed, (v.spec.performance.topSpeed / 3.6) * lerp(0.9, 1.0, skill))
-    if (this.errorBrakeDelay > 0) targetSpeed *= 1.12
+    // A late-braking mistake carries the car in a few m/s too fast, not 12 % of 260 km/h into a barrier.
+    if (this.errorBrakeDelay > 0) targetSpeed += Math.min(targetSpeed * 0.12, 4)
     targetSpeed = Math.min(targetSpeed, followSpeedCap)
     // Off the racing surface or rejoining after a spin: slow down rather than powering across the run-off.
     if (v.telemetry.onLooseSurface) targetSpeed = Math.min(targetSpeed, 14)

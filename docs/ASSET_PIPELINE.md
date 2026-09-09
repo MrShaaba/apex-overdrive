@@ -90,7 +90,24 @@ Integration points:
   lists materials with their base-colour texture, triangle count and extent, `texsheet.mjs`
   renders a contact sheet of those textures (the only way to read ripped exports whose
   material names are `11001Mtl_76`), and `map-track.mjs <scene.gltf> <out.png> --points <json>
-  label=regex…` draws material groups with the centreline and its direction.
+  label=regex…` draws material groups with the centreline and its direction (`--crop`,
+  `--points-scale`). `flatmats.mjs <scene.gltf>` is the ground census: per material the flat
+  (horizontal) area, height and extent — a big flat area that no rule catches lands in `prop`
+  and has no ground collider, so a car running onto it drops to the apron (Sepang's painted
+  run-off and ground-painted sponsor logos). `boxmats.mjs <scene.gltf> x0,z0,x1,z1…` lists the
+  materials inside a footprint, `near-materials.mjs` those around a point. Rules can also
+  give `cls: 'drop'` to invisible helper meshes (Sepang ships a circuit-wide alpha-0 sheet).
+  Re-centring walks reach 14 m each way (a hairpin with run-off asphalt outside it is
+  20 m wide) and stop at kerbs, walls, verges or gravel laid over the asphalt polygon, and
+  asphalt that steps down 8 cm within half a metre (a lower run-off sheet); of two roads
+  running side by side between the same skeleton junctions (apron, pit lane, service road)
+  only the wider survives. Figure-eight circuits (Suzuka) get `crossings: [[x, z]]` — the overpass reads as one
+  4-way skeleton junction that no simple cycle can pass twice, so the tracer pairs each arm
+  with the arm opposite it and splits the junction into two straight-through passes, then
+  ranks cycles by length (the lobes wind in opposite directions and cancel in the area sum).
+  Ripped exports put the pit lane under a material of its own (Sepang: concrete slabs +
+  blue pit-box floors) and a look-alike service strip elsewhere — check the pit zone the
+  tracer prints against the start straight before trusting it.
 * **Scenery library** — `node tools/asset-pipeline/prepare-props.mjs city` groups a scene's objects by
   footprint overlap into props, drops ground sheets, classifies them by size (building, shop,
   railing, bollard, post, billboard), centres each on its footprint with its base at y = 0 and

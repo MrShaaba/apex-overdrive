@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-09T04:42:29.215Z",
+  "generatedAt": "2026-09-09T06:20:55.825Z",
   "assets": [
     {
       "id": "model.cars.challenger",
@@ -91,6 +91,12 @@
       "type": "model",
       "file": "models/tracks/hungaroring.glb",
       "bytes": 35728584
+    },
+    {
+      "id": "model.tracks.sepang",
+      "type": "model",
+      "file": "models/tracks/sepang.glb",
+      "bytes": 8362368
     },
     {
       "id": "model.tracks.spa",
