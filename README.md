@@ -37,7 +37,7 @@ Requirements: Node 18+, a browser with WebGL 2 + WebAssembly (Chrome, Edge, Fire
 | Hide HUD | N | — | — |
 | Pause | Esc / P | Start | ❚❚ |
 
-Full list in [docs/CONTROLS.md](docs/CONTROLS.md).
+Racing wheels (Logitech G29 / G920 / G923 and similar) and several controllers are supported: calibrate and assign them to players in Options → Controls. Full list in [docs/CONTROLS.md](docs/CONTROLS.md).
 
 ## Project layout
 

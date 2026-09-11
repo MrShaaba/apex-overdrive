@@ -25,3 +25,6 @@ dist-ssr
 
 # Raw asset downloads (Sketchfab glTF, Poly Haven EXR) — compressed output lives under public/assets
 assets-src/
+
+# Headless test screenshots
+tests/shots/

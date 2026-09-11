@@ -47,7 +47,7 @@ export interface GameEvents {
   'progress:credits': { delta: number; total: number; reason: string }
   'challenge:complete': { id: string; title: string; reward: number }
 
-  'input:action': { action: string; pressed: boolean }
+  'input:action': { action: string; pressed: boolean; player?: number }
   'ui:toast': { text: string; icon?: string }
 }
 

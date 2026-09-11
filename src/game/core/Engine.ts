@@ -189,7 +189,7 @@ export class Engine {
       }
 
       this.input.attachPointer(canvas)
-      this.input.configure({ sensitivity: this.settings.controls.steeringSensitivity, deadzone: this.settings.controls.steeringDeadzone, tilt: this.settings.controls.touchLayout === 'tilt', tiltSensitivity: this.settings.controls.tiltSensitivity })
+      this.input.configure({ sensitivity: this.settings.controls.steeringSensitivity, deadzone: this.settings.controls.steeringDeadzone, tilt: this.settings.controls.touchLayout === 'tilt', tiltSensitivity: this.settings.controls.tiltSensitivity, devices: this.settings.controls.devices, players: this.settings.controls.players })
       this.input.touch.active = isTouchDevice()
       this.qualityManager.enabled = this.settings.graphics.dynamicScaling
       this.qualityManager.setMaxScale(this.quality.resolutionScale)
@@ -303,7 +303,7 @@ export class Engine {
     this.applyResolution(this.qualityManager.scale)
     if (prevQuality.textureScale !== this.quality.textureScale) this.textures.setScale(this.quality.textureScale)
     this.audio?.applySettings(settings.audio)
-    this.input.configure({ sensitivity: settings.controls.steeringSensitivity, deadzone: settings.controls.steeringDeadzone, tilt: settings.controls.touchLayout === 'tilt', tiltSensitivity: settings.controls.tiltSensitivity })
+    this.input.configure({ sensitivity: settings.controls.steeringSensitivity, deadzone: settings.controls.steeringDeadzone, tilt: settings.controls.touchLayout === 'tilt', tiltSensitivity: settings.controls.tiltSensitivity, devices: settings.controls.devices, players: settings.controls.players })
     if (this.player) {
       this.player.controller.assists = { abs: settings.controls.abs, tcs: settings.controls.tractionControl, esc: settings.controls.stabilityControl, autoTransmission: settings.controls.transmission === 'auto' }
       this.player.controller.fuelEnabled = settings.gameplay.fuelConsumption && this.config?.mode === 'endurance'

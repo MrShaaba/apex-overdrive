@@ -10,7 +10,7 @@
     "build:analyze": "tsc -b && vite build --mode analyze",
     "typecheck": "tsc -b --pretty",
     "lint": "eslint .",
-    "test": "node tests/collider-audit.mjs",
+    "test": "node tests/collider-audit.mjs && node tests/wheel-calibration.mjs",
     "preview": "vite preview --host",
     "assets:manifest": "node tools/asset-pipeline/build-manifest.mjs",
     "assets:validate": "node tools/asset-pipeline/validate.mjs"

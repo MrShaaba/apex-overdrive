@@ -1,3 +1,4 @@
+import type { DeviceProfile } from '../input/Gamepads'
 /**
  * Player preferences + graphics quality presets.
  *
@@ -43,6 +44,10 @@ export interface AudioSettings {
 }
 
 export interface ControlSettings {
+  /** Calibrated gamepad / wheel profiles by device id. */
+  devices: Record<string, DeviceProfile>
+  /** Device id assigned to player 1 and player 2 (null = first free device). */
+  players: [string | null, string | null]
   steeringSensitivity: number
   steeringDeadzone: number
   touchLayout: TouchLayout
@@ -121,6 +126,8 @@ export function defaultSettings(): Settings {
     },
     audio: { master: 0.8, engine: 0.9, sfx: 0.9, music: 0.55, ambience: 0.7, muteInBackground: true },
     controls: {
+      devices: {},
+      players: [null, null],
       steeringSensitivity: 1,
       steeringDeadzone: 0.08,
       touchLayout: 'buttons',

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Screen } from '../components/Screen'
 import { Button } from '../components/Button'
 import { Panel, Segmented, Field, Slider, Toggle } from '../components/Controls'
+import { DevicePanel } from '../components/DevicePanel'
 import { useProfile } from '../hooks'
 import { Engine } from '../../game/core/Engine'
 import { saveManager } from '../../game/persistence/SaveManager'
@@ -124,6 +125,7 @@ export function OptionsScreen() {
                 </Field>
                 <Toggle value={c.vibration} onChange={(v) => update((s) => (s.controls.vibration = v))} label="Vibration on impact (mobile)" />
               </Panel>
+              <DevicePanel settings={settings} update={update} />
               <Panel title="Assists & units">
                 <Field label="Transmission">
                   <Segmented<TransmissionMode> value={c.transmission} options={[{ value: 'auto', label: 'Automatic' }, { value: 'manual', label: 'Manual (Q/E)' }]} onChange={(v) => update((s) => (s.controls.transmission = v))} />
