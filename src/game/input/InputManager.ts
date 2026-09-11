@@ -35,6 +35,7 @@ export type InputAction =
   | 'back'
   | 'leaderboard'
   | 'toggleHud'
+  | 'colliderDebug'
 
 const KEY_ACTIONS: Record<string, InputAction> = {
   Escape: 'pause',
@@ -47,6 +48,7 @@ const KEY_ACTIONS: Record<string, InputAction> = {
   KeyV: 'replay',
   KeyH: 'horn',
   KeyL: 'headlights',
+  F3: 'colliderDebug',
   Enter: 'confirm',
   Tab: 'leaderboard',
   KeyN: 'toggleHud',

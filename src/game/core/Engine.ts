@@ -46,6 +46,7 @@ import { recordCareerResult, SERIES_TRACKS, starsForResult } from '../gameplay/C
 import { network } from '../net'
 import { gameStore, navigate, pushToast, bumpProfile, initialHud, type HudStanding, type MinimapCar } from '../state/GameStore'
 import { buildCarVisual, type CarVisual } from '../vehicles/CarMeshBuilder'
+import { ColliderDebug } from '../render/ColliderDebug'
 import { modelLibrary } from '../vehicles/CarModelLoader'
 
 const log = Logger.scope('Engine')
@@ -68,6 +69,8 @@ export class Engine {
   renderer!: THREE.WebGLRenderer
   readonly scene = new THREE.Scene()
   physics!: PhysicsWorld
+  /** Wireframe of every Rapier collider (F3 / `__apex.setColliderDebug(true)`). */
+  colliderDebug: ColliderDebug | null = null
   readonly input = new InputManager()
   readonly textures = new TextureFactory()
   particles!: ParticleSystem
@@ -143,6 +146,7 @@ export class Engine {
 
       setLoading(0.3, 'Starting physics')
       this.physics = await PhysicsWorld.create()
+      this.colliderDebug = new ColliderDebug(this.physics, this.scene)
       this.physics.onContact((e) => this.onContact(e.meta1, e.meta2, e.collider1, e.collider2, e.maxForce))
 
       setLoading(0.5, 'Building environment')
@@ -232,6 +236,7 @@ export class Engine {
           if (action === 'gearDown') this.player?.controller.shiftDown()
           if (action === 'photo') this.enterPhotoMode()
           if (action === 'toggleHud') gameStore.set({ hudVisible: !s.hudVisible })
+          if (action === 'colliderDebug') this.setColliderDebug(!this.colliderDebug?.enabled)
           if (action === 'replay' && this.race?.phase === 'finished') this.startReplay()
         }
       }),
@@ -1295,7 +1300,14 @@ export class Engine {
   }
 
   private renderFrame(dt: number): void {
+    this.colliderDebug?.update()
     this.post.render(dt)
+  }
+
+  /** Draw (or hide) every physics collider as wireframe over the scene. */
+  setColliderDebug(on: boolean): void {
+    this.colliderDebug?.setEnabled(on)
+    log.info(`Collider debug ${on ? 'on' : 'off'}`)
   }
 
   getMinimap() {

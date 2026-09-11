@@ -124,9 +124,37 @@ export class PhysicsWorld {
     this.eventQueue.drainCollisionEvents(() => {})
   }
 
+  /**
+   * Body scopes: everything a track (or its props/hazards) creates between
+   * `beginScope()` and `endScope()` is remembered, and the disposer `endScope()` returns
+   * removes whatever is still alive. Before this, a disposed track left its road,
+   * walls, barriers and prop colliders in the world, so every later race drove through
+   * the previous circuit's invisible geometry.
+   */
+  private readonly scopes: Set<RAPIER.RigidBody>[] = []
+
+  beginScope(): void {
+    this.scopes.push(new Set())
+  }
+
+  endScope(): () => void {
+    const bodies = this.scopes.pop() ?? new Set<RAPIER.RigidBody>()
+    return () => {
+      for (const b of bodies) if (b.isValid()) this.removeBody(b)
+      bodies.clear()
+    }
+  }
+
+  /** Create a rigid body, remembered by the active scope (if any). */
+  createBody(desc: RAPIER.RigidBodyDesc): RAPIER.RigidBody {
+    const body = this.world.createRigidBody(desc)
+    this.scopes[this.scopes.length - 1]?.add(body)
+    return body
+  }
+
   /** Convenience: create a static trimesh collider with surface metadata. */
   addStaticTrimesh(vertices: Float32Array, indices: Uint32Array, meta: ColliderMeta, friction = 0.9): RAPIER.Collider {
-    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
+    const body = this.createBody(RAPIER.RigidBodyDesc.fixed())
     const desc = RAPIER.ColliderDesc.trimesh(vertices, indices).setFriction(friction).setRestitution(0.05)
     const collider = this.world.createCollider(desc, body)
     this.registerCollider(collider, meta)
@@ -140,7 +168,7 @@ export class PhysicsWorld {
     meta: ColliderMeta,
     friction = 0.6,
   ): RAPIER.Collider {
-    const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z).setRotation(rotation))
+    const body = this.createBody(RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z).setRotation(rotation))
     const desc = RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z).setFriction(friction).setRestitution(0.2)
     const collider = this.world.createCollider(desc, body)
     this.registerCollider(collider, meta)
@@ -148,7 +176,7 @@ export class PhysicsWorld {
   }
 
   removeBody(body: RAPIER.RigidBody): void {
-    if (this.disposed) return
+    if (this.disposed || !body.isValid()) return
     for (let i = 0; i < body.numColliders(); i++) {
       this.meta.delete(body.collider(i).handle)
     }

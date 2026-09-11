@@ -118,6 +118,20 @@ Integration points:
   Ripped exports put the pit lane under a material of its own (Sepang: concrete slabs +
   blue pit-box floors) and a look-alike service strip elsewhere — check the pit zone the
   tracer prints against the start straight before trusting it.
+* **Collider audit** — `npm test` (needs `npm run dev` running and system Chrome) opens
+  every circuit in the catalog and samples the drivable band a metre inside each kerb with
+  a box from 5 cm to 1.45 m above the road; any collider without a visible mesh inside it
+  fails the run, visible barriers, props and hazards inside the band are listed, and ground
+  colliders stepping more than 25 cm above the road are reported. The first run found the
+  real cause of "invisible objects": a disposed track never removed its physics bodies, so
+  every race after the first drove through the previous circuit's road, walls and props —
+  bodies now live in a `PhysicsWorld` scope released on dispose. It also found trees planted
+  on elevated road (the prop clearance measured 3-D distance to samples at y = 0), and
+  ice/water patches that were 4 cm cuboids (now flush sensors). F3 in a race (or
+  `__apex.setColliderDebug(true)`) draws every collider as wireframe. Tracks whose pit lane
+  shares the track's asphalt behind a pit wall take `cutWalls: true` (Indianapolis) so the
+  wall splits the raster instead of centring the line on it — not for circuits with an
+  overpass, whose parapets would sever the road beneath.
 * **The garage is licensed models only** (2026-09-09): the eight procedural catalog cars
   (Vortex, Comet, the Marchetti coupé, the rally hatch, the drift build, the EV, the track
   special and the prototype) are retired; their ids alias to licensed cars so saves, career

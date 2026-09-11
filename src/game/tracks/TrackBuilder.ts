@@ -175,7 +175,7 @@ function addTrimeshCollider(physics: PhysicsWorld, geometry: THREE.BufferGeometr
   const pos = geometry.attributes.position.array as Float32Array
   const idx = geometry.index ? new Uint32Array(geometry.index.array) : undefined
   if (!idx) return
-  const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed())
+  const body = physics.createBody(physics.RAPIER.RigidBodyDesc.fixed())
   const cells = new Map<number, number[]>()
   for (let t = 0; t < idx.length; t += 3) {
     const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3
@@ -211,6 +211,7 @@ function addTrimeshCollider(physics: PhysicsWorld, geometry: THREE.BufferGeometr
 
 export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, textures: TextureFactory, quality: ResolvedQuality): Promise<BuiltTrack> {
   const t0 = performance.now()
+  physics.beginScope() // every body built below is removed again in dispose()
   const root = new THREE.Group()
   root.name = `track-${def.id}`
   const env = def.environment
@@ -309,12 +310,12 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   }
   // Circuit models ship a flat terrain plane at y = 0.
   const terrainHeight = useModel ? (): number => 0 : proceduralTerrainHeight
+  // Plan-view distance: nearestIndex measures in 3-D and a point at y = 0 reads as far
+  // from an elevated shortcut, which put scenery on it.
   const shortcutClearance = (x: number, z: number): number => {
     let best = Infinity
     for (const sc of shortcutSplines) {
-      const j = sc.spline.nearestIndex(new THREE.Vector3(x, 0, z))
-      const ss = sc.spline.samples[j]
-      best = Math.min(best, Math.hypot(x - ss.position.x, z - ss.position.z) - sc.halfWidth)
+      for (const ss of sc.spline.samples) best = Math.min(best, Math.hypot(x - ss.position.x, z - ss.position.z) - sc.halfWidth)
     }
     return best
   }
@@ -1130,6 +1131,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
 
   log.info(`Built ${def.name} in ${(performance.now() - t0).toFixed(0)}ms — ${spline.length.toFixed(0)} m, ${checkpoints.length} checkpoints`)
 
+  const releaseBodies = physics.endScope()
   return {
     def,
     spline,
@@ -1168,6 +1170,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     dispose() {
       hazards.dispose()
       props.dispose()
+      releaseBodies()
       for (const d of disposables) d.dispose()
       root.clear()
     },

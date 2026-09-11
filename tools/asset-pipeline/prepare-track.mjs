@@ -237,6 +237,7 @@ const TRACKS = {
     direction: 'ccw',
     controlSpacing: 10,
     startMarker: /standard_20\.004_50$/, // the pit garages along the front straight
+    cutWalls: true, // the pit lane shares the oval's asphalt behind the pit wall
     // The oval is the lap; the infield road course stays drivable asphalt but is not traced
     // (the largest cycle is the oval anyway).
     rules: [
@@ -505,6 +506,11 @@ let roadTopGrid = null // highest road surface per cell, for the edge walks
   }
 }
 const wallGrid = wallTris.length ? rasteriseEdges(wallTris) : null
+// `cutWalls`: wall cells leave the road raster, so a pit lane that shares the track's
+// asphalt behind a pit wall (Indianapolis) becomes a parallel band of its own instead of
+// merging with the track and centring the skeleton on the wall. Opt-in: on circuits with
+// overpasses the bridge parapets would sever the road beneath them (Suzuka).
+if (wallGrid && cfg.cutWalls) { let cut = 0; for (let i = 0; i < grid.length; i++) if (wallGrid[i] && (grid[i] || fullGrid[i])) { grid[i] = 0; fullGrid[i] = 0; cut++ } if (cut) console.log(`${cut} road cells under walls — cut from the raster`) }
 // Kerbs are lap surface for tracing, but the usable width the AI gets stops at
 // them: a 3D sausage kerb taken at speed launches a car.
 const kerbTris = trisOfPrims(prims.filter((p) => p.cls === 'kerb'))

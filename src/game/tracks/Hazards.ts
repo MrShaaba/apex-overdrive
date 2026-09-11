@@ -46,7 +46,7 @@ export class HazardSystem {
     this.root.add(root)
 
     const kinematicBox = (size: THREE.Vector3, color: number, meta = { hazardId: id, wall: true }) => {
-      const body = physics.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(s.position.x, s.position.y, s.position.z))
+      const body = physics.createBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(s.position.x, s.position.y, s.position.z))
       const col = physics.world.createCollider(R.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2).setCollisionGroups(HAZARD_GROUPS).setFriction(0.4), body)
       physics.registerCollider(col, meta)
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), new THREE.MeshStandardMaterial({ color, metalness: 0.4, roughness: 0.5 }))
@@ -202,7 +202,7 @@ export class HazardSystem {
           for (let i = 0; i < count; i++) {
             const start = s.position.clone().addScaledVector(s.right, spawnSide * (halfWidth + 8 + Math.random() * 3)).addScaledVector(s.tangent, (Math.random() - 0.5) * 12)
             start.y = Math.max(start.y, terrainHeight(start.x, start.z)) + 6 + Math.random() * 4
-            const body = physics.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(start.x, start.y, start.z).setLinvel(-spawnSide * s.right.x * 9, 0, -spawnSide * s.right.z * 9).setAngularDamping(0.5))
+            const body = physics.createBody(R.RigidBodyDesc.dynamic().setTranslation(start.x, start.y, start.z).setLinvel(-spawnSide * s.right.x * 9, 0, -spawnSide * s.right.z * 9).setAngularDamping(0.5))
             const col = physics.world.createCollider((isBale ? R.ColliderDesc.cylinder(0.7, radius) : R.ColliderDesc.ball(radius)).setDensity(isSnow ? 200 : isBale ? 150 : 600).setFriction(0.8).setRestitution(0.2).setCollisionGroups(HAZARD_GROUPS), body)
             physics.registerCollider(col, { hazardId: id })
             const mesh = new THREE.Mesh(geo, mat)
@@ -247,8 +247,10 @@ export class HazardSystem {
       case 'fountain': {
         const isIce = feature.kind === 'ice'
         const span = feature.span ?? 40
-        const body = physics.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(s.position.x, s.position.y + 0.02, s.position.z).setRotation({ x: alongRight.x, y: alongRight.y, z: alongRight.z, w: alongRight.w }))
-        const col = physics.world.createCollider(R.ColliderDesc.cuboid(halfWidth, 0.02, span / 2).setCollisionGroups(makeGroups(CollisionGroup.GROUND, CollisionGroup.ALL)).setFriction(0.2), body)
+        // A surface-only patch: a sensor whose top sits 5 mm above the road so the wheel rays
+        // read ice/water first, but nothing to push a chassis — the old 4 cm cuboid was a kerb.
+        const body = physics.createBody(R.RigidBodyDesc.fixed().setTranslation(s.position.x, s.position.y - 0.015, s.position.z).setRotation({ x: alongRight.x, y: alongRight.y, z: alongRight.z, w: alongRight.w }))
+        const col = physics.world.createCollider(R.ColliderDesc.cuboid(halfWidth, 0.02, span / 2).setSensor(true).setCollisionGroups(makeGroups(CollisionGroup.GROUND, CollisionGroup.ALL)).setFriction(0.2), body)
         physics.registerCollider(col, { surface: isIce ? 'ice' : 'water', hazardId: id })
         bodies.push(body)
         const patch = new THREE.Mesh(

@@ -124,8 +124,26 @@ export function buildProps(
     return c
   }
 
+  // Nearest spline sample in plan (x, z) only. The spline's own nearestIndex measures in
+  // 3-D, so on a circuit with elevation a point at y = 0 read as "far from the road" next
+  // to a section 100 m up — and trees got planted on the racing line at Alpine Ridge.
+  const nearestInPlan = (x: number, z: number): number => {
+    let best = 0, bestD = Infinity
+    const samples = spline.samples
+    for (let i = 0; i < samples.length; i += 2) {
+      const dx = x - samples[i].position.x, dz = z - samples[i].position.z
+      const d = dx * dx + dz * dz
+      if (d < bestD) { bestD = d; best = i }
+    }
+    for (let i = Math.max(0, best - 2); i <= Math.min(samples.length - 1, best + 2); i++) {
+      const dx = x - samples[i].position.x, dz = z - samples[i].position.z
+      const d = dx * dx + dz * dz
+      if (d < bestD) { bestD = d; best = i }
+    }
+    return best
+  }
   const roadClearance = (x: number, z: number): number => {
-    const i = spline.nearestIndex(new THREE.Vector3(x, 0, z))
+    const i = nearestInPlan(x, z)
     const s = spline.samples[i]
     const dx = x - s.position.x
     const dz = z - s.position.z
@@ -169,7 +187,7 @@ export function buildProps(
       positions.push(pos)
       if (opts.collide && d < 40) {
         const r = (opts.collideRadius ?? 1) * s
-        const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + r, pos.z))
+        const body = physics.createBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + r, pos.z))
         const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cylinder(r * 1.5, r).setCollisionGroups(PROP_GROUPS), body)
         physics.registerCollider(col, { wall: true, surface: 'concrete' })
       }
@@ -272,7 +290,7 @@ export function buildProps(
       placements.push({ prop, matrix: m, position })
       positions.push(position)
       if (d < 60) {
-        const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(x, y + h / 2, z).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }))
+        const body = physics.createBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(x, y + h / 2, z).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }))
         const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cuboid(w / 2, h / 2, dep / 2).setCollisionGroups(PROP_GROUPS), body)
         physics.registerCollider(col, { wall: true, surface: 'concrete' })
       }
@@ -312,7 +330,7 @@ export function buildProps(
         mats.push(m)
         positions.push(new THREE.Vector3(x, y, z))
         if (d < 60) {
-          const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(x, y + h / 2, z))
+          const body = physics.createBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(x, y + h / 2, z))
           const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cuboid(w / 2, h / 2, dep / 2).setCollisionGroups(PROP_GROUPS), body)
           physics.registerCollider(col, { wall: true, surface: 'concrete' })
         }
@@ -382,7 +400,7 @@ export function buildProps(
       const m = new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1))
       shops.push({ prop, matrix: m, position: p })
       const r = Math.max(prop.w, prop.d) * 0.5
-      const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y + prop.h / 2, p.z).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }))
+      const body = physics.createBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(p.x, p.y + prop.h / 2, p.z).setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }))
       const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cuboid(prop.w / 2, prop.h / 2, prop.d / 2).setCollisionGroups(PROP_GROUPS), body)
       physics.registerCollider(col, { wall: true, surface: 'concrete' })
       void r
@@ -557,7 +575,7 @@ export function buildProps(
         // Collider for this segment's front face.
         const cx = sample.position.x + sample.right.x * f.side * (halfWidth + 3.0)
         const cz = sample.position.z + sample.right.z * f.side * (halfWidth + 3.0)
-        const body = physics.world.createRigidBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(cx, sample.position.y + 1.0, cz).setRotation({ x: yawQ.x, y: yawQ.y, z: yawQ.z, w: yawQ.w }))
+        const body = physics.createBody(physics.RAPIER.RigidBodyDesc.fixed().setTranslation(cx, sample.position.y + 1.0, cz).setRotation({ x: yawQ.x, y: yawQ.y, z: yawQ.z, w: yawQ.w }))
         const col = physics.world.createCollider(physics.RAPIER.ColliderDesc.cuboid(0.4, 1.2, segLen / 2 + 0.2).setCollisionGroups(PROP_GROUPS), body)
         physics.registerCollider(col, { wall: true, surface: 'concrete' })
       }
