@@ -8,21 +8,6 @@
 
 import type { VehicleSpec } from './VehicleSpec'
 
-const ice = (o: Partial<VehicleSpec['engine']>): VehicleSpec['engine'] => ({
-  type: 'ice',
-  maxTorque: 500,
-  peakRpm: 5500,
-  redline: 7500,
-  idleRpm: 900,
-  cylinders: 8,
-  turbo: false,
-  supercharged: false,
-  turboGain: 0,
-  turboSpool: 3,
-  soundProfile: 'v8',
-  ...o,
-})
-
 export const VEHICLE_CATALOG: VehicleSpec[] = [
   // --- Licensed road cars (tools/asset-pipeline/prepare-car.mjs, contact-detected wheels) ---
   {
@@ -347,7 +332,7 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
   },
   {
     id: 'lotus-72d',
-    name: 'Lotus 72D',
+    name: '72D',
     brand: 'Lotus',
     vehicleClass: 'formula',
     tagline: 'Wedge, wings and a Cosworth.',
@@ -699,7 +684,7 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
   },
   {
     id: 'mercedes-sls',
-    name: 'SLS AMG Safety Car',
+    name: 'SLS Safety Car',
     brand: 'Mercedes-AMG',
     vehicleClass: 'supercar',
     tagline: 'Gullwings and a light bar.',
@@ -731,7 +716,7 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
   },
   {
     id: 'mercedes-amg-one',
-    name: 'AMG One',
+    name: 'One',
     brand: 'Mercedes-AMG',
     vehicleClass: 'supercar',
     tagline: 'A Formula 1 engine for the road.',

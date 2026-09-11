@@ -128,10 +128,12 @@ export function GarageScreen() {
           const locked = profile.level < v.unlockLevel
           return (
             <div key={v.id} className={`card ${v.id === selected ? 'card--on' : ''} ${locked && !isOwned ? 'card--locked' : ''}`} onClick={() => setSelected(v.id)}>
-              <div className="card__title">
-                {v.brand} {v.name}
+              <div className="card__title" title={`${v.brand} ${v.name}`}>
+                {v.name}
               </div>
-              <div className="card__sub">{VEHICLE_CLASS_LABEL[v.vehicleClass]} · Tier {v.tier}</div>
+              <div className="card__sub">
+                {v.brand} · {VEHICLE_CLASS_LABEL[v.vehicleClass]} · Tier {v.tier}
+              </div>
               <div className="card__badge">{isOwned ? (profile.selectedCar === v.id ? 'Active' : 'Owned') : locked ? `Lv ${v.unlockLevel}` : formatCredits(v.price)}</div>
             </div>
           )

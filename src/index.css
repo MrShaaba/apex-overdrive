@@ -1306,6 +1306,39 @@ input[type='text']:focus {
 }
 
 /* ---------- Garage ----------------------------------------------------------- */
+/* Garage cards: the list is a fixed-height flex column, so cards must not shrink to fit
+   (23 cars shrank each card to 26 px and clipped the names). The name gets one line of
+   its own with room reserved for the badge column, an overlong name ends in an ellipsis
+   (full name in the tooltip) and the badge never sits over text. */
+.garage__list .card {
+  flex: 0 0 auto;
+}
+.garage__list .card__title {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 76px;
+}
+.garage__list .card__sub {
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.garage__list .card__badge {
+  top: 12px;
+  right: 10px;
+  margin-top: 0;
+  max-width: 64px;
+  box-sizing: border-box;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .garage__list {
   width: 300px;
