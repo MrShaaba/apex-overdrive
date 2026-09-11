@@ -69,6 +69,8 @@ export class Engine {
   renderer!: THREE.WebGLRenderer
   readonly scene = new THREE.Scene()
   physics!: PhysicsWorld
+  /** Seconds each car has been at rest on its grid slot (grid hold bookkeeping). */
+  private readonly gridSettle = new Map<number, number>()
   /** Wireframe of every Rapier collider (F3 / `__apex.setColliderDebug(true)`). */
   colliderDebug: ColliderDebug | null = null
   readonly input = new InputManager()
@@ -391,6 +393,7 @@ export class Engine {
       await this.spawnField(config)
 
       this.race = new RaceManager(this.track, config)
+      this.gridSettle.clear()
       this.vehicles.forEach((v, i) => this.race!.addRacer(v.id, v.name, v.spec.id, v.isPlayer, this.track!.startGrid[i]))
       this.replay.begin(this.vehicles.length)
       this.setupGhost(config)
@@ -1007,11 +1010,14 @@ export class Engine {
           continue
         }
         const out = v.ai.update(simDt, ctx)
+        const waiting = race.phase === 'grid' || race.phase === 'countdown'
         v.input.steer = out.steer
-        v.input.throttle = out.throttle
-        v.input.brake = out.brake
-        v.input.handbrake = out.handbrake
-        v.input.boost = out.boost
+        // On the grid an AI car waits like the player does: no throttle, handbrake on, so it
+        // settles onto its slot instead of creeping until the hold engages.
+        v.input.throttle = waiting ? 0 : out.throttle
+        v.input.brake = waiting ? 0 : out.brake
+        v.input.handbrake = waiting ? true : out.handbrake
+        v.input.boost = waiting ? false : out.boost
       }
 
       // Physics.
@@ -1029,6 +1035,25 @@ export class Engine {
         v.controller.repair(sdt * 0.25)
         v.controller.refuel(sdt * 12)
       })
+
+      // Grid hold: every car drops onto its slot with only vertical motion allowed, settles
+      // onto its suspension (all four wheels down and no vertical motion for 0.15 s, or
+      // 2.5 s at most), then stays pinned until the lights go out. Released cars start from
+      // zero velocity, so nothing but the engine moves them at the start.
+      const onGrid = race.phase === 'grid' || race.phase === 'countdown'
+      for (const v of this.vehicles) {
+        const c = v.controller
+        if (!onGrid) {
+          if (c.holdMode !== 'free') c.setHold('free')
+          continue
+        }
+        if (c.holdMode === 'hold') continue
+        if (c.holdMode === 'free') c.setHold('settle')
+        const settled = c.telemetry.wheelsOnGround === 4 && Math.abs(c.velocity.y) < 0.05
+        const rest = settled ? (this.gridSettle.get(v.id) ?? 0) + simDt : 0
+        this.gridSettle.set(v.id, rest)
+        if (rest >= 0.15 || this.elapsed - this.raceStartTime > 2.5) c.setHold('hold')
+      }
 
       // Respawns.
       for (const v of this.vehicles) {

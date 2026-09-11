@@ -346,7 +346,46 @@ export class VehicleController {
     this.up.set(0, 1, 0).applyQuaternion(this.quaternion)
   }
 
+  private hold: 'free' | 'settle' | 'hold' = 'free'
+
+  /** Grid state: 'settle' (only vertical motion, onto the springs), 'hold' (pinned), 'free'. */
+  get holdMode(): 'free' | 'settle' | 'hold' {
+    return this.hold
+  }
+
+  get isHeld(): boolean {
+    return this.hold === 'hold'
+  }
+
+  /**
+   * Start-grid restraint. 'settle' lets the car drop onto its suspension but nothing else —
+   * no creeping down a cambered grid, no nudges from a neighbour — 'hold' pins it at rest
+   * until the lights go out, and 'free' hands it back to the engine with zero velocity so
+   * nothing but its own power moves it at the start.
+   */
+  setHold(mode: 'free' | 'settle' | 'hold'): void {
+    if (this.hold === mode) return
+    this.hold = mode
+    const b = this.body
+    if (mode === 'settle') {
+      b.setEnabledTranslations(false, true, false, true)
+      b.setEnabledRotations(true, false, true, true)
+    } else if (mode === 'hold') {
+      b.setEnabledTranslations(false, false, false, true)
+      b.setEnabledRotations(false, false, false, true)
+      b.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      this.velocity.set(0, 0, 0)
+    } else {
+      b.setEnabledTranslations(true, true, true, true)
+      b.setEnabledRotations(true, true, true, true)
+      b.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    }
+  }
+
   teleport(position: THREE.Vector3, quaternion: THREE.Quaternion, keepSpeed = 0): void {
+    this.setHold('free')
     this.body.setTranslation({ x: position.x, y: position.y, z: position.z }, true)
     this.body.setRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w }, true)
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).multiplyScalar(keepSpeed)
