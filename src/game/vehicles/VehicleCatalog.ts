@@ -55,7 +55,7 @@ export const VEHICLE_CATALOG: VehicleSpec[] = [
     tier: 3,
     model: {
       file: 'assets/models/cars/challenger.glb',
-      cockpitEye: [-0.45, 2.05, 0.1],
+      cockpitEye: [-0.45, 1.82, 0.25], // lifted cab: below the roof line, ahead of the seat back
       tcam: [0, 2.85, 1.2],
       exhausts: [[-0.5, 0.9, -2.5], [0.5, 0.9, -2.5]],
       credit: '"dodge challenger modified truck" by carmodifier on Sketchfab, CC-BY-NC 4.0',

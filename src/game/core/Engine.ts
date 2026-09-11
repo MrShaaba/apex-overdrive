@@ -47,6 +47,7 @@ import { network } from '../net'
 import { gameStore, navigate, pushToast, bumpProfile, initialHud, type HudStanding, type MinimapCar } from '../state/GameStore'
 import { buildCarVisual, type CarVisual } from '../vehicles/CarMeshBuilder'
 import { ColliderDebug } from '../render/ColliderDebug'
+import { resolveCockpitView } from '../render/CockpitView'
 import { modelLibrary } from '../vehicles/CarModelLoader'
 
 const log = Logger.scope('Engine')
@@ -69,6 +70,9 @@ export class Engine {
   renderer!: THREE.WebGLRenderer
   readonly scene = new THREE.Scene()
   physics!: PhysicsWorld
+  /** Cockpit eye (visual-root frame) and extra meshes hidden in cockpit view, resolved per model. */
+  private cockpitEye: THREE.Vector3 | null = null
+  private cockpitExtraHidden: THREE.Object3D[] = []
   /** Seconds each car has been at rest on its grid slot (grid hold bookkeeping). */
   private readonly gridSettle = new Map<number, number>()
   /** Wireframe of every Rapier collider (F3 / `__apex.setColliderDebug(true)`). */
@@ -394,6 +398,17 @@ export class Engine {
 
       this.race = new RaceManager(this.track, config)
       this.gridSettle.clear()
+      // Cockpit view: find an eye the road is visible from on this model.
+      this.cockpitEye = null
+      this.cockpitExtraHidden = []
+      if (this.player?.spec.model) {
+        const m = this.player.spec.model
+        const base = new THREE.Vector3(m.cockpitEye[0], m.cockpitEye[1] - this.player.spec.comHeight, m.cockpitEye[2])
+        const res = resolveCockpitView(this.player.visual, base, this.player.spec.body.length)
+        this.cockpitEye = res.eye
+        this.cockpitExtraHidden = res.hidden
+        log.info(`[Cockpit] ${this.player.spec.name}: ${res.note}`)
+      }
       this.vehicles.forEach((v, i) => this.race!.addRacer(v.id, v.name, v.spec.id, v.isPlayer, this.track!.startGrid[i]))
       this.replay.begin(this.vehicles.length)
       this.setupGhost(config)
@@ -1123,7 +1138,9 @@ export class Engine {
       boosting: t.nitroActive,
       bodyHeight: player.spec.body.height,
       bodyLength: player.spec.body.length,
-      cockpitOffset: player.spec.model
+      cockpitOffset: this.cockpitEye
+        ? this.cockpitEye
+        : player.spec.model
         ? new THREE.Vector3(player.spec.model.cockpitEye[0], player.spec.model.cockpitEye[1] - player.spec.comHeight, player.spec.model.cockpitEye[2])
         : player.spec.body.shape === 'formula'
           ? new THREE.Vector3(0, 0.54, 0.02)
@@ -1139,6 +1156,7 @@ export class Engine {
     // the view at eye level and washes out the display. The wheels stay
     // visible for an open-wheeler feel; headlight spots live on the root.
     for (const o of player.visual.cockpitHidden) o.visible = this.cameraRig.mode !== 'cockpit'
+    for (const o of this.cockpitExtraHidden) o.visible = this.cameraRig.mode !== 'cockpit'
     this.cockpitWheel?.update(dt, this.cameraRig.mode === 'cockpit' ? {
       steerAngle: t.steerAngle,
       maxSteerAngle: THREE.MathUtils.degToRad(player.spec.steering.maxAngle),

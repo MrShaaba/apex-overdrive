@@ -150,7 +150,20 @@ export class CockpitWheel {
 
   private mat<T extends THREE.Material>(m: T): T {
     this.materials.push(m)
+    // The wheel is glued to the camera and must never be hidden behind a model's own
+    // dashboard or cockpit surround: drawn after the scene, without depth testing.
+    m.depthTest = false
+    m.depthWrite = false
     return m
+  }
+
+  /** Draw every part of the wheel after the scene (see `mat`). */
+  private onTop(o: THREE.Object3D): void {
+    o.traverse((c) => {
+      c.renderOrder = 2000
+      const mesh = c as THREE.Mesh
+      if (mesh.isMesh) for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) { m.depthTest = false; m.depthWrite = false }
+    })
   }
 
   /** Per-frame update. Pass null when the wheel should not be shown. */
@@ -180,6 +193,7 @@ export class CockpitWheel {
 
   setVisible(visible: boolean): void {
     this.root.visible = visible
+    this.onTop(this.root)
   }
 
   /**
@@ -205,6 +219,7 @@ export class CockpitWheel {
         }
       })
       this.model = model
+    this.onTop(model)
       this.spinner.add(model)
       // The McLaren wheel's screen sits at the top centre, 0.10 × 0.06 m,
       // just behind a glass cover; park the readout a hair in front of it.

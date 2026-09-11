@@ -118,6 +118,13 @@ Integration points:
   Ripped exports put the pit lane under a material of its own (Sepang: concrete slabs +
   blue pit-box floors) and a look-alike service strip elsewhere — check the pit zone the
   tracer prints against the start straight before trusting it.
+* **Cockpit view** — `cockpitEye` in the catalog is a starting point: at race start
+  `resolveCockpitView` casts rays from it to the road 10–60 m ahead across the track width
+  against the car's own meshes (glass excluded), raises the eye up to 25 cm and then moves
+  it forward until fewer than a tenth are blocked, and hides small parts still in the way
+  (never the body shell). The result is logged as `[Cockpit] <car>: …`; `drive.mjs
+  --cockpit` in the scratch harness prints it with the screenshot. The steering wheel is
+  drawn after the scene without depth testing so no dashboard can hide it.
 * **Collider audit** — `npm test` (needs `npm run dev` running and system Chrome) opens
   every circuit in the catalog and samples the drivable band a metre inside each kerb with
   a box from 5 cm to 1.45 m above the road; any collider without a visible mesh inside it
