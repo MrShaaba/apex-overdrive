@@ -122,7 +122,7 @@ export class RaceManager {
       lastPosition: this.racers.size + 1,
       gap: 0,
     }
-    if (isPlayer) this.playerId = vehicleId
+    if (isPlayer && this.playerId < 0) this.playerId = vehicleId
     this.racers.set(vehicleId, state)
     this.standingsDirty = true
     return state
@@ -245,10 +245,11 @@ export class RaceManager {
 
     // End conditions.
     if (this.phase === 'racing') {
-      const player = this.player
+      // Every human (two in split screen) has to be classified before the timer runs.
+      const humans = [...this.racers.values()].filter((r) => r.isPlayer)
       const remaining = [...this.racers.values()].filter((r) => !r.finished && !r.eliminated)
-      const playerDone = !player || player.finished || player.eliminated
-      if (playerDone && this.endTimer < 0) this.endTimer = player?.eliminated ? 2.5 : 6
+      const playerDone = humans.every((r) => r.finished || r.eliminated)
+      if (playerDone && this.endTimer < 0) this.endTimer = humans.length > 0 && humans.every((r) => r.eliminated) ? 2.5 : 6
       if (this.endTimer >= 0) {
         this.endTimer -= dt
         if (this.endTimer <= 0 || remaining.length === 0) this.finishRace()

@@ -40,6 +40,8 @@ export const GAME_MODES: Record<GameModeId, GameModeDef> = {
   freeroam: { id: 'freeroam', title: 'Open Driving', subtitle: 'No timer, no rivals', description: 'Explore any circuit at your own pace. Great for tuning and photos.', icon: '🛣️', defaultLaps: 0, lapsSelectable: false, aiDefault: 0, aiMax: 6, pointToPoint: false, scoring: 'none', eliminationInterval: 0, payoutMultiplier: 0, xpMultiplier: 0.2, showInMenu: true },
 }
 
+export type SplitLayout = 'stack' | 'side'
+
 export interface RaceConfig {
   mode: GameModeId
   trackId: string
@@ -60,6 +62,12 @@ export interface RaceConfig {
   heat?: number
   seed: number
   playerGridSlot?: number
+  /** Local players sharing the screen (1 or 2). */
+  players?: 1 | 2
+  /** Player 2's car (two-player only). */
+  carId2?: string
+  /** Split-screen layout for two players: stacked top/bottom or side by side. */
+  splitLayout?: SplitLayout
 }
 
 export function defaultRaceConfig(partial: Partial<RaceConfig> = {}): RaceConfig {

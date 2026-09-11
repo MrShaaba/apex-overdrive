@@ -42,6 +42,17 @@ pedals on axes 2 and 3, paddles on buttons 4 and 5).
 
 Force feedback is not exposed to browsers, so wheels run without it.
 
+## Local two-player (split screen)
+Race Setup → Session → Players → **Two players · split screen** (Instant Race, Last-Place-Out,
+Point-to-Point Dash, Multi-lap Event and Open Driving). Pick top/bottom or side-by-side, and
+player 2's car from the garage; AI fills the rest of the grid. Player 1 drives with the
+keyboard plus the first pad (or wheel), player 2 with the second pad — or the keyboard when
+assigned so in Options → Controls → Wheels & controllers. Each player has their own camera
+(the camera button on their own pad), gear paddles, reset and HUD; pause is shared.
+Split screen renders both views straight to the canvas without the post-processing stack,
+caps the render scale and trims shadows and particles so heavier circuits stay playable.
+Photo mode is unavailable while split.
+
 ## Touch
 Buttons layout: ◀ ▶ steer, GAS, BRAKE, E-BRK, NOS, CAM, RESET, pause.
 Tilt layout: hold the phone in landscape and tilt to steer; GAS/BRAKE remain on screen.

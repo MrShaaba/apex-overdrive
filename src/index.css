@@ -1631,3 +1631,51 @@ input[type='text']:focus {
 .calib__actions {
   justify-content: flex-end;
 }
+
+/* Split screen */
+.split {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+.split--stack {
+  flex-direction: column;
+}
+.split--side {
+  flex-direction: row;
+}
+.split__view {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.split--stack .split__view + .split__view {
+  border-top: 2px solid rgba(255, 255, 255, 0.35);
+}
+.split--side .split__view + .split__view {
+  border-left: 2px solid rgba(255, 255, 255, 0.35);
+}
+.split__view .hud__countdown {
+  font-size: clamp(48px, 9vw, 96px);
+}
+.split__tag {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 106, 0, 0.75);
+}
+.split__tag--p2 {
+  background: rgba(0, 229, 255, 0.7);
+  color: #041018;
+}

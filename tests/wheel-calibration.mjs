@@ -71,7 +71,7 @@ console.log('players:', players)
 await page.screenshot({ path: 'tests/shots/wheel-panel-assigned.png' })
 
 // Race: press the wheel's throttle and check the car accelerates; pad steer feeds player 2.
-await page.evaluate(() => window.__apex.startRace({ mode: 'quick', trackId: 'lakeside', carId: 'w13', laps: 1, aiCount: 0, aiMix: 'class', difficulty: 'easy', weather: 'clear', hour: 12, dynamicWeather: false, timeRate: 0, ghost: false, seed: 1 }))
+await page.evaluate(() => window.__apex.startRace({ mode: 'quick', trackId: 'lakeside', carId: 'w13', laps: 1, aiCount: 0, aiMix: 'class', difficulty: 'rookie', weather: 'clear', hour: 12, dynamicWeather: false, timeRate: 0, ghost: false, seed: 1 }))
 await page.waitForFunction(() => window.__apex.race && window.__apex.race.phase === 'racing', { timeout: 60000 })
 await setAxis('wheel', 2, -1) // throttle floored, wheel straight
 await wait(3000)

@@ -98,6 +98,10 @@ export interface UIState {
   loading: { progress: number; label: string }
   profileVersion: number
   hud: HudState
+  /** Player 2's HUD in split screen. */
+  hud2: HudState
+  /** Active split-screen layout ('none' outside two-player races). */
+  split: 'none' | 'stack' | 'side'
   hudVisible: boolean
   messages: HudMessage[]
   paused: boolean
@@ -172,6 +176,8 @@ export const gameStore = new Store<UIState>({
   loading: { progress: 0, label: 'Initialising' },
   profileVersion: 0,
   hud: initialHud(),
+  hud2: initialHud(),
+  split: 'none',
   hudVisible: true,
   messages: [],
   paused: false,

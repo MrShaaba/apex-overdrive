@@ -7,7 +7,7 @@ import { Screen } from '../components/Screen'
 import { Button } from '../components/Button'
 import { Panel, Segmented, Field, Slider, Toggle, Chip } from '../components/Controls'
 import { useProfile } from '../hooks'
-import { GAME_MODES, defaultRaceConfig, DIFFICULTY_LABEL, type GameModeId, type RaceConfig } from '../../game/gameplay/GameModes'
+import { GAME_MODES, defaultRaceConfig, DIFFICULTY_LABEL, type GameModeId, type RaceConfig, type SplitLayout } from '../../game/gameplay/GameModes'
 import { TRACK_CATALOG, WEATHER_LABEL, type WeatherKind } from '../../game/tracks/TrackCatalog'
 import { getVehicleSpec } from '../../game/vehicles/VehicleCatalog'
 import { Engine } from '../../game/core/Engine'
@@ -18,6 +18,8 @@ import { leaderboards } from '../../game/gameplay/Leaderboards'
 import { formatTime } from '../../game/core/MathUtils'
 
 const MODE_ORDER: GameModeId[] = ['quick', 'timetrial', 'championship', 'elimination', 'drift', 'sprint', 'endurance', 'knockout', 'freeroam']
+/** Modes that can host a second local player (series and solo modes cannot). */
+const TWO_PLAYER_MODES: GameModeId[] = ['quick', 'elimination', 'sprint', 'endurance', 'freeroam']
 
 export function RaceSetupScreen() {
   const profile = useProfile()
@@ -32,11 +34,16 @@ export function RaceSetupScreen() {
     let trackId = config.trackId
     if (def.pointToPoint && t.closed) trackId = TRACK_CATALOG.find((x) => !x.closed && profile.unlockedTracks.includes(x.id))?.id ?? trackId
     if (!def.pointToPoint && !t.closed && m !== 'freeroam') trackId = TRACK_CATALOG.find((x) => x.closed && profile.unlockedTracks.includes(x.id))?.id ?? trackId
-    patch({ mode: m, trackId, laps: def.defaultLaps === 'track' ? (TRACK_CATALOG.find((x) => x.id === trackId)?.defaultLaps ?? 3) : def.defaultLaps, aiCount: Math.min(def.aiDefault, def.aiMax) })
+    patch({ mode: m, trackId, laps: def.defaultLaps === 'track' ? (TRACK_CATALOG.find((x) => x.id === trackId)?.defaultLaps ?? 3) : def.defaultLaps, aiCount: Math.min(def.aiDefault, def.aiMax), players: TWO_PLAYER_MODES.includes(m) ? config.players : 1 })
   }
   const best = leaderboards.playerBest(config.trackId)
+  const twoPlayerOk = TWO_PLAYER_MODES.includes(config.mode)
+  const twoPlayers = twoPlayerOk && config.players === 2
+  const ownedCars = profile.ownedCars.map(getVehicleSpec)
+  const car2 = getVehicleSpec(config.carId2 ?? profile.ownedCars.find((id) => id !== profile.selectedCar) ?? profile.selectedCar)
+  const setPlayers = (players: 1 | 2) => patch({ players, carId2: config.carId2 ?? car2.id, splitLayout: config.splitLayout ?? 'stack' })
   const start = () => {
-    const cfg: RaceConfig = { ...config, carId: profile.selectedCar, seed: Math.floor(Math.random() * 1e9), dynamicWeather: config.weather === 'random' || config.dynamicWeather }
+    const cfg: RaceConfig = { ...config, carId: profile.selectedCar, players: twoPlayers ? 2 : 1, carId2: twoPlayers ? car2.id : undefined, seed: Math.floor(Math.random() * 1e9), dynamicWeather: config.weather === 'random' || config.dynamicWeather }
     if (cfg.mode === 'championship' || cfg.mode === 'knockout') void Engine.get().startSeries(cfg, cfg.mode)
     else void Engine.get().startRace(cfg)
   }
@@ -95,6 +102,28 @@ export function RaceSetupScreen() {
       </div>
       <div className="col" style={{ width: 340, flexShrink: 0 }}>
         <Panel title="Session">
+          {twoPlayerOk && (
+            <Field label="Players">
+              <Segmented<1 | 2> value={twoPlayers ? 2 : 1} options={[{ value: 1, label: 'Solo' }, { value: 2, label: 'Two players · split screen' }]} onChange={setPlayers} />
+            </Field>
+          )}
+          {twoPlayers && (
+            <>
+              <Field label="Screen layout">
+                <Segmented<SplitLayout> value={config.splitLayout ?? 'stack'} options={[{ value: 'stack', label: 'Top / bottom' }, { value: 'side', label: 'Side by side' }]} onChange={(splitLayout) => patch({ splitLayout })} />
+              </Field>
+              <Field label="Player 2 car" value={`${car2.brand} ${car2.name}`}>
+                <div className="row" style={{ flexWrap: 'wrap', gap: 6 }} data-testid="p2-cars">
+                  {ownedCars.map((v) => (
+                    <button key={v.id} className={`segmented__opt ${v.id === car2.id ? 'segmented__opt--on' : ''}`} title={`${v.brand} ${v.name}`} onClick={() => patch({ carId2: v.id })}>
+                      {v.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="hint" style={{ margin: '6px 0 0' }}>Player 1 drives your garage car ({car.brand} {car.name}). Player 2 uses the second pad, a wheel, or the keyboard — set in Options → Controls.</p>
+              </Field>
+            </>
+          )}
           {mode.lapsSelectable && (
             <Field label="Laps" value={config.laps}>
               <Slider value={config.laps} min={1} max={config.mode === 'endurance' ? 30 : 10} step={1} onChange={(laps) => patch({ laps })} />
@@ -103,7 +132,7 @@ export function RaceSetupScreen() {
           {mode.aiMax > 0 && (
             <>
               <Field label="Rivals" value={config.aiCount}>
-                <Slider value={config.aiCount} min={config.mode === 'drift' ? 0 : 1} max={mode.aiMax} step={1} onChange={(aiCount) => patch({ aiCount })} />
+                <Slider value={Math.min(config.aiCount, mode.aiMax - (twoPlayers ? 1 : 0))} min={config.mode === 'drift' ? 0 : 1} max={mode.aiMax - (twoPlayers ? 1 : 0)} step={1} onChange={(aiCount) => patch({ aiCount })} />
               </Field>
               <Field label="Field competency">
                 <Segmented<FieldMix> value={config.aiMix} options={(['mixed', 'rookie', 'amateur', 'pro', 'elite', 'legend'] as FieldMix[]).map((v) => ({ value: v, label: v }))} onChange={(aiMix) => patch({ aiMix })} />

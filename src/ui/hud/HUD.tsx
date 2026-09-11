@@ -12,8 +12,8 @@ import { formatTime } from '../../game/core/MathUtils'
 import { useProfile } from '../hooks'
 import { WEATHER_LABEL, type WeatherKind } from '../../game/tracks/TrackCatalog'
 
-export function HUD() {
-  const hud = useGameStore((s) => s.hud)
+export function HUD({ player = 0, scale = 1, compact = false }: { player?: 0 | 1; scale?: number; compact?: boolean } = {}) {
+  const hud = useGameStore((s) => (player === 1 ? s.hud2 : s.hud))
   const messages = useGameStore((s) => s.messages)
   const profile = useProfile()
   const units = profile.settings.controls.units
@@ -26,11 +26,13 @@ export function HUD() {
   const isElim = hud.mode === 'elimination'
   const hour = Math.floor(hud.hour)
   const minute = Math.floor((hud.hour - hour) * 60)
-  const standings = hud.standings.slice(0, 8)
+  // Split-screen viewports are half height, so the standings list is trimmed there.
+  const rows = compact ? 4 : 8
+  const standings = hud.standings.slice(0, rows)
   const playerIdx = hud.standings.findIndex((s) => s.isPlayer)
-  const shown = standings.some((s) => s.isPlayer) || playerIdx < 0 ? standings : [...standings.slice(0, 7), hud.standings[playerIdx]]
+  const shown = standings.some((s) => s.isPlayer) || playerIdx < 0 ? standings : [...standings.slice(0, rows - 1), hud.standings[playerIdx]]
   return (
-    <div className="hud" style={{ transform: `scale(${profile.settings.gameplay.hudScale})` }}>
+    <div className="hud" style={{ transform: `scale(${profile.settings.gameplay.hudScale * scale})` }}>
       {/* Top-left: position & lap */}
       <div className="hud__corner hud__tl">
         {!isFree && (

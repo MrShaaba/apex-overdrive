@@ -20,8 +20,8 @@ import { ParticleSystem, PrecipitationSystem } from '../render/Particles'
 import { SkySystem } from '../render/Sky'
 import { WeatherSystem } from '../render/Weather'
 import { PostPipeline } from '../render/PostProcessing'
-import { CameraRig } from '../render/CameraRig'
-import { CockpitWheel } from '../render/CockpitWheel'
+import { CameraRig, type CameraTarget } from '../render/CameraRig'
+import { CockpitWheel, type WheelTelemetry } from '../render/CockpitWheel'
 import { QualityManager } from '../render/QualityManager'
 import { Showcase } from '../render/Showcase'
 import { AudioEngine } from '../audio/AudioEngine'
@@ -44,7 +44,7 @@ import { leaderboards } from '../gameplay/Leaderboards'
 import { captureFrame, storePhoto } from '../gameplay/PhotoMode'
 import { recordCareerResult, SERIES_TRACKS, starsForResult } from '../gameplay/Career'
 import { network } from '../net'
-import { gameStore, navigate, pushToast, bumpProfile, initialHud, type HudStanding, type MinimapCar } from '../state/GameStore'
+import { gameStore, navigate, pushToast, bumpProfile, initialHud, type HudStanding, type HudState, type MinimapCar } from '../state/GameStore'
 import { buildCarVisual, type CarVisual } from '../vehicles/CarMeshBuilder'
 import { ColliderDebug } from '../render/ColliderDebug'
 import { resolveCockpitView } from '../render/CockpitView'
@@ -58,6 +58,8 @@ const SKY_HDRI = { file: 'assets/hdri/nqweba_dawn_2k.hdr', sunLongitudeDeg: 73.8
 const COCKPIT_WHEEL_MODEL = 'assets/models/cockpit/mclaren_wheel.glb'
 
 type EngineMode = 'boot' | 'showcase' | 'loading' | 'race' | 'replay'
+
+const _viewSize = new THREE.Vector2()
 
 export class Engine {
   private static _instance: Engine | null = null
@@ -96,6 +98,16 @@ export class Engine {
   track: BuiltTrack | null = null
   vehicles: Vehicle[] = []
   player: Vehicle | null = null
+  /** Second local player in split screen. */
+  player2: Vehicle | null = null
+  readonly cameraRig2 = new CameraRig(16 / 9)
+  private cockpitWheel2: CockpitWheel | null = null
+  private cockpitEye2: THREE.Vector3 | null = null
+  private cockpitExtraHidden2: THREE.Object3D[] = []
+  private playerDrs2: 'none' | 'available' | 'active' = 'none'
+  /** Split-screen layout of the current session. */
+  split: 'none' | 'stack' | 'side' = 'none'
+  private lastAspect = 0
   race: RaceManager | null = null
   racingLine: RacingLine | null = null
   config: RaceConfig | null = null
@@ -115,6 +127,8 @@ export class Engine {
   private replaySpeed = 1
   private adaptiveSkill = 0.9
   private raceEnded = false
+  /** Bumped whenever a session is unloaded so late timers from the old one stay quiet. */
+  private sessionToken = 0
   private showcaseDrag = 0
   private raceStartTime = 0
   private frameCounter = 0
@@ -170,8 +184,14 @@ export class Engine {
       this.scene.add(this.cameraRig.camera)
       this.cockpitWheel = new CockpitWheel()
       this.cameraRig.camera.add(this.cockpitWheel.root)
+      this.scene.add(this.cameraRig2.camera)
+      this.cockpitWheel2 = new CockpitWheel()
+      this.cockpitWheel2.setVisible(false)
+      this.cameraRig2.camera.add(this.cockpitWheel2.root)
       void modelLibrary.preload(COCKPIT_WHEEL_MODEL).then((ok) => {
-        if (ok) this.cockpitWheel?.setModel(modelLibrary.get(COCKPIT_WHEEL_MODEL))
+        if (!ok) return
+        this.cockpitWheel?.setModel(modelLibrary.get(COCKPIT_WHEEL_MODEL))
+        this.cockpitWheel2?.setModel(modelLibrary.get(COCKPIT_WHEEL_MODEL))
       })
       this.showcase = new Showcase(this.textures)
       for (let i = 0; i < 6; i++) {
@@ -226,9 +246,11 @@ export class Engine {
 
   private bindEvents(): void {
     this.disposeListeners.push(
-      bus.on('input:action', ({ action, pressed }) => {
+      bus.on('input:action', ({ action, pressed, player }) => {
         if (!pressed) return
         const s = gameStore.get()
+        const who = player === 1 && this.player2 ? 1 : 0
+        const car = who ? this.player2 : this.player
         if (this.mode === 'race' || this.mode === 'replay') {
           if (action === 'pause') {
             if (s.photo.active) this.exitPhotoMode()
@@ -236,10 +258,10 @@ export class Engine {
             else this.togglePause()
           }
           if (this.paused || s.photo.active) return
-          if (action === 'camera') this.cycleCamera()
-          if (action === 'reset') this.respawnPlayer()
-          if (action === 'gearUp') this.player?.controller.shiftUp()
-          if (action === 'gearDown') this.player?.controller.shiftDown()
+          if (action === 'camera') this.cycleCamera(who)
+          if (action === 'reset') this.respawnPlayer(who)
+          if (action === 'gearUp') car?.controller.shiftUp()
+          if (action === 'gearDown') car?.controller.shiftDown()
           if (action === 'photo') this.enterPhotoMode()
           if (action === 'toggleHud') gameStore.set({ hudVisible: !s.hudVisible })
           if (action === 'colliderDebug') this.setColliderDebug(!this.colliderDebug?.enabled)
@@ -272,7 +294,7 @@ export class Engine {
   private onResize = (): void => {
     const w = window.innerWidth
     const h = window.innerHeight
-    this.cameraRig.resize(w / h)
+    this.updateAspects()
     this.showcaseCamera.aspect = w / h
     this.showcaseCamera.updateProjectionMatrix()
     this.applyResolution(this.qualityManager.scale)
@@ -362,6 +384,8 @@ export class Engine {
     this.paused = false
     this.raceEnded = false
     this.config = config
+    this.split = config.players === 2 ? (config.splitLayout ?? 'stack') : 'none'
+    gameStore.set({ split: this.split })
     await this.unloadSession()
     await new Promise((r) => setTimeout(r, 30))
     try {
@@ -409,6 +433,16 @@ export class Engine {
         this.cockpitExtraHidden = res.hidden
         log.info(`[Cockpit] ${this.player.spec.name}: ${res.note}`)
       }
+      this.cockpitEye2 = null
+      this.cockpitExtraHidden2 = []
+      if (this.player2?.spec.model) {
+        const m = this.player2.spec.model
+        const base = new THREE.Vector3(m.cockpitEye[0], m.cockpitEye[1] - this.player2.spec.comHeight, m.cockpitEye[2])
+        const res = resolveCockpitView(this.player2.visual, base, this.player2.spec.body.length)
+        this.cockpitEye2 = res.eye
+        this.cockpitExtraHidden2 = res.hidden
+        log.info(`[Cockpit] P2 ${this.player2.spec.name}: ${res.note}`)
+      }
       this.vehicles.forEach((v, i) => this.race!.addRacer(v.id, v.name, v.spec.id, v.isPlayer, this.track!.startGrid[i]))
       this.replay.begin(this.vehicles.length)
       this.setupGhost(config)
@@ -417,10 +451,16 @@ export class Engine {
       this.cameraRig.setMode(this.settings.gameplay.defaultCamera === 'cinematic' ? 'chase' : this.settings.gameplay.defaultCamera)
       this.cameraRig.fovBase = this.settings.graphics.fovBase
       this.cockpitWheel?.setDash(this.player?.spec.body.shape !== 'formula' && !this.player?.spec.model)
+      this.cameraRig2.setMode(this.settings.gameplay.defaultCamera === 'cinematic' ? 'chase' : this.settings.gameplay.defaultCamera)
+      this.cameraRig2.fovBase = this.settings.graphics.fovBase
+      this.cockpitWheel2?.setDash(this.player2?.spec.body.shape !== 'formula' && !this.player2?.spec.model)
+      this.applySplitQuality()
+      this.updateAspects()
       this.post.setCamera(this.cameraRig.camera)
       this.scene.remove(this.showcase.root)
       this.mode = 'race'
-      gameStore.set({ loading: { progress: 1, label: 'Lights out' }, hud: { ...initialHud(), totalLaps: this.race.totalLaps, total: this.vehicles.length, mode: config.mode, weather: this.weather.state.kind, seriesRound: this.seriesLabel() } })
+      const hud0 = { ...initialHud(), totalLaps: this.race.totalLaps, total: this.vehicles.length, mode: config.mode, weather: this.weather.state.kind, seriesRound: this.seriesLabel() }
+      gameStore.set({ loading: { progress: 1, label: 'Lights out' }, hud: hud0, hud2: { ...hud0 } })
       navigate('race')
       this.audio?.music.setMode('race')
       this.audio?.music.setIntensity(0.4)
@@ -440,26 +480,36 @@ export class Engine {
     ensureCarState(config.carId)
     const carState = profile.cars[config.carId]
     const playerSpec = getVehicleSpec(config.carId)
-    const aiCount = clamp(config.aiCount, 0, Math.min(13, GAME_MODES[config.mode].aiMax))
-    const total = aiCount + 1
+    const humans = config.players === 2 ? 2 : 1
+    const carId2 = humans === 2 ? (config.carId2 ?? config.carId) : null
+    if (carId2) ensureCarState(carId2)
+    const spec2 = carId2 ? getVehicleSpec(carId2) : null
+    const aiCount = clamp(config.aiCount, 0, Math.min(13, GAME_MODES[config.mode].aiMax) - (humans - 1))
+    const total = aiCount + humans
     const playerSlot = config.playerGridSlot ?? (config.mode === 'timetrial' || config.mode === 'freeroam' || config.mode === 'drift' ? 0 : Math.min(total - 1, Math.max(0, Math.round(total * 0.6))))
     const assists = { abs: this.settings.controls.abs, tcs: this.settings.controls.tractionControl, esc: this.settings.controls.stabilityControl, autoTransmission: this.settings.controls.transmission === 'auto' }
     const fuelEnabled = this.settings.gameplay.fuelConsumption && config.mode === 'endurance'
     const damageEnabled = this.settings.gameplay.damage !== 'off'
     this.aiProfiles = generateField(aiCount, config.aiMix, config.seed)
     const usedCars = new Set<string>()
+    if (spec2) usedCars.add(spec2.id)
+    // Player 2 lines up right behind (or, from the back row, ahead of) player 1.
+    const player2Slot = humans === 2 ? (playerSlot + 1 < total ? playerSlot + 1 : playerSlot - 1) : -1
     let id = 0
     for (let slot = 0; slot < total; slot++) {
       const grid = track.startGrid[slot]
-      if (slot === playerSlot) {
+      if (slot === playerSlot || slot === player2Slot) {
+        const second = slot === player2Slot
+        const spec = second && spec2 ? spec2 : playerSpec
+        const state = second && carId2 ? profile.cars[carId2] : carState
         const v = new Vehicle({
           id: id++,
-          spec: playerSpec,
-          customization: carState.customization,
-          upgrades: carState.upgrades,
+          spec,
+          customization: state.customization,
+          upgrades: state.upgrades,
           isPlayer: true,
-          name: profile.playerName,
-          color: '#ff6a00',
+          name: second ? 'Player 2' : profile.playerName,
+          color: second ? '#00e5ff' : '#ff6a00',
           position: grid.position,
           quaternion: grid.quaternion,
           highDetail: true,
@@ -470,13 +520,14 @@ export class Engine {
           assists,
           fuelEnabled,
           damageEnabled,
-          initialDamage: config.mode === 'freeroam' ? 0 : carState.damage * 0.5,
+          initialDamage: config.mode === 'freeroam' ? 0 : state.damage * 0.5,
         })
         this.vehicles.push(v)
-        this.player = v
+        if (second) this.player2 = v
+        else this.player = v
         continue
       }
-      const aiIdx = this.vehicles.length - (this.player ? 1 : 0)
+      const aiIdx = this.vehicles.length - (this.player ? 1 : 0) - (this.player2 ? 1 : 0)
       const driver = this.aiProfiles[aiIdx] ?? this.aiProfiles[0]
       // A formula player races a spec-series field of other formula cars, and
       // road cars never draw formula traffic. Licensed models stay with the
@@ -527,7 +578,7 @@ export class Engine {
         color: team ? team.paint : driver.color,
         position: grid.position,
         quaternion: grid.quaternion,
-        highDetail: this.quality.propDensity >= 0.7,
+        highDetail: this.quality.propDensity >= 0.7 && humans === 1,
         physics: this.physics,
         scene: this.scene,
         textures: this.textures,
@@ -585,6 +636,9 @@ export class Engine {
     }
     this.paused = false
     await this.unloadSession()
+    this.split = 'none'
+    gameStore.set({ split: 'none' })
+    this.applySplitQuality()
     this.enterShowcase(saveManager.get().selectedCar)
     gameStore.set({ paused: false, replay: { active: false, playing: false, time: 0, duration: 0, speed: 1 }, photo: { active: false, lastCapture: null } })
     navigate('menu')
@@ -600,9 +654,11 @@ export class Engine {
   }
 
   private async unloadSession(): Promise<void> {
+    this.sessionToken++
     for (const v of this.vehicles) v.dispose()
     this.vehicles = []
     this.player = null
+    this.player2 = null
     this.race = null
     this.racingLine = null
     if (this.ghostVisual) {
@@ -674,7 +730,9 @@ export class Engine {
     gameStore.set({ results, rewards, resultStars: stars, unlockedAchievements: achievements, completedChallenges: challenges, series: this.series ? { ...this.series } : null })
     this.audio?.music.setMode('results')
     this.cameraRig.setMode('cinematic')
-    window.setTimeout(() => navigate('results'), config.mode === 'freeroam' ? 0 : 1800)
+    // Quitting to the menu (or starting another race) before this fires must not drag the UI to results.
+    const token = this.sessionToken
+    window.setTimeout(() => { if (this.sessionToken === token && this.mode === 'race') navigate('results') }, config.mode === 'freeroam' ? 0 : 1800)
     bumpProfile()
   }
 
@@ -762,14 +820,16 @@ export class Engine {
     if (this.paused) this.togglePause()
   }
 
-  setCamera(mode: CameraMode): void {
-    this.cameraRig.setMode(mode)
-    gameStore.set((s) => ({ hud: { ...s.hud, cameraMode: mode } }))
+  setCamera(mode: CameraMode, player = 0): void {
+    const rig = player === 1 ? this.cameraRig2 : this.cameraRig
+    rig.setMode(mode)
+    gameStore.set((s) => (player === 1 ? { hud2: { ...s.hud2, cameraMode: mode } } : { hud: { ...s.hud, cameraMode: mode } }))
   }
 
-  cycleCamera(): void {
-    this.cameraRig.cycle()
-    gameStore.set((s) => ({ hud: { ...s.hud, cameraMode: this.cameraRig.mode } }))
+  cycleCamera(player = 0): void {
+    const rig = player === 1 ? this.cameraRig2 : this.cameraRig
+    rig.cycle()
+    gameStore.set((s) => (player === 1 ? { hud2: { ...s.hud2, cameraMode: rig.mode } } : { hud: { ...s.hud, cameraMode: rig.mode } }))
   }
 
   /** Attach or detach an AI brain to the player's car. */
@@ -782,10 +842,11 @@ export class Engine {
     } else if (!on) this.player.ai = null
   }
 
-  respawnPlayer(): void {
-    if (!this.player || !this.race) return
-    const pose = this.race.respawnPose(this.player.id)
-    this.player.respawn(pose.position, pose.quaternion)
+  respawnPlayer(player = 0): void {
+    const car = player === 1 ? this.player2 : this.player
+    if (!car || !this.race) return
+    const pose = this.race.respawnPose(car.id)
+    car.respawn(pose.position, pose.quaternion)
   }
 
   /** Pause-menu repair (costs credits, only outside endurance pit rules). */
@@ -806,6 +867,10 @@ export class Engine {
 
   enterPhotoMode(): void {
     if (this.mode !== 'race' && this.mode !== 'replay') return
+    if (this.split !== 'none' && this.mode === 'race') {
+      pushToast('Photo mode is not available in split screen', '📷')
+      return
+    }
     this.paused = true
     this.input.setEnabled(false)
     this.cameraRig.setMode('photo')
@@ -985,6 +1050,24 @@ export class Engine {
         player.input.boost = false
       }
       this.cameraRig.lookBack = input.lookBack
+      const p2 = this.player2
+      if (p2) {
+        const in2 = this.input.getState(1)
+        if (race.active) {
+          p2.input.steer = in2.steer
+          p2.input.throttle = in2.throttle
+          p2.input.brake = in2.brake
+          p2.input.handbrake = in2.handbrake
+          p2.input.boost = in2.boost
+        } else {
+          p2.input.throttle = 0
+          p2.input.brake = 0
+          p2.input.steer = in2.steer
+          p2.input.handbrake = race.phase === 'countdown' || race.phase === 'grid'
+          p2.input.boost = false
+        }
+        this.cameraRig2.lookBack = in2.lookBack
+      }
 
       // AI.
       const traffic: AITrafficEntry[] = this.vehicles.map((v) => {
@@ -1116,61 +1199,27 @@ export class Engine {
       v.controller.speedLimitKmh = r?.inPitLane ? 96.5 : null
     }
     // DRS: available inside a designated zone, active while flat out there.
-    let drs: 'none' | 'available' | 'active' = 'none'
-    const pr = race.player
-    if (pr && !pr.inPitLane && track.drsZones.length && (race.phase === 'racing' || race.phase === 'freeroam')) {
-      const inZone = track.drsZones.some((z) => (z.from <= z.to ? pr.progress > z.from && pr.progress < z.to : pr.progress > z.from || pr.progress < z.to))
-      if (inZone) drs = t.speedKmh > 80 && player.input.throttle > 0.85 && player.input.brake < 0.1 && !t.airborne ? 'active' : 'available'
+    this.playerDrs = this.drsFor(player)
+    player.controller.drsActive = this.playerDrs === 'active'
+    if (this.player2) {
+      this.playerDrs2 = this.drsFor(this.player2)
+      this.player2.controller.drsActive = this.playerDrs2 === 'active'
     }
-    this.playerDrs = drs
-    player.controller.drsActive = drs === 'active'
 
-    // Camera.
-    this.cameraRig.update(dt, {
-      position: player.visual.root.position,
-      quaternion: player.visual.root.quaternion,
-      velocity: player.controller.velocity,
-      forward: player.controller.forward,
-      up: player.controller.up,
-      speedKmh: t.speedKmh,
-      gLat: t.gLat,
-      gLong: t.gLong,
-      boosting: t.nitroActive,
-      bodyHeight: player.spec.body.height,
-      bodyLength: player.spec.body.length,
-      cockpitOffset: this.cockpitEye
-        ? this.cockpitEye
-        : player.spec.model
-        ? new THREE.Vector3(player.spec.model.cockpitEye[0], player.spec.model.cockpitEye[1] - player.spec.comHeight, player.spec.model.cockpitEye[2])
-        : player.spec.body.shape === 'formula'
-          ? new THREE.Vector3(0, 0.54, 0.02)
-          : new THREE.Vector3(-0.35, player.spec.body.height * 0.55 - player.spec.comHeight + 0.35, player.spec.body.length * 0.05),
-      hoodOffset: player.spec.model
-        ? new THREE.Vector3(player.spec.model.tcam[0], player.spec.model.tcam[1] - player.spec.comHeight, player.spec.model.tcam[2])
-        : player.spec.body.shape === 'formula' ? new THREE.Vector3(0, 1.02 - player.spec.comHeight, -0.3) : undefined,
-    }, { x: input.cameraOrbitX, y: input.cameraOrbitY })
+    // Cameras.
+    this.cameraRig.update(dt, this.cameraTargetFor(player, this.cockpitEye), { x: input.cameraOrbitX, y: input.cameraOrbitY })
+    if (this.player2) this.cameraRig2.update(dt, this.cameraTargetFor(this.player2, this.cockpitEye2), { x: 0, y: 0 })
 
     // Procedural cars have no modelled interior, so in cockpit view their
     // shell and detail meshes are hidden (licensed models hide only their own
     // steering wheel) — otherwise the windshield glass slices
     // the view at eye level and washes out the display. The wheels stay
     // visible for an open-wheeler feel; headlight spots live on the root.
-    for (const o of player.visual.cockpitHidden) o.visible = this.cameraRig.mode !== 'cockpit'
-    for (const o of this.cockpitExtraHidden) o.visible = this.cameraRig.mode !== 'cockpit'
-    this.cockpitWheel?.update(dt, this.cameraRig.mode === 'cockpit' ? {
-      steerAngle: t.steerAngle,
-      maxSteerAngle: THREE.MathUtils.degToRad(player.spec.steering.maxAngle),
-      gear: t.gear,
-      speedKmh: t.speedKmh,
-      rpm: t.rpm,
-      redline: player.tuned.engine.redline,
-      limiter: t.limiter,
-      units: this.settings.controls.units,
-      ers: player.controller.getNitroFraction(),
-      ersMode: t.nitroActive ? 'deploy' : t.harvesting ? 'harvest' : 'idle',
-      drs: this.playerDrs,
-      pitLimiter: race.player?.inPitLane ?? false,
-    } : null)
+    // In split screen renderFrame re-applies this per viewport.
+    this.applyCockpitVisibility(0)
+    this.cockpitWheel?.update(dt, this.cameraRig.mode === 'cockpit' ? this.wheelTelemetryFor(player, this.playerDrs) : null)
+    this.cockpitWheel2?.update(dt, this.player2 && this.cameraRig2.mode === 'cockpit' ? this.wheelTelemetryFor(this.player2, this.playerDrs2) : null)
+    if (this.split === 'none' || !this.player2) this.cockpitWheel2?.setVisible(false)
 
     this.sky.update(simDt, w, player.position, this.cameraRig.camera.getWorldDirection(new THREE.Vector3()))
     this.updateStreetLights()
@@ -1284,16 +1333,21 @@ export class Engine {
   }
 
   private pushHud(): void {
+    const hud = this.buildHud(this.player!, this.cameraRig, this.playerDrs)
+    if (this.player2) gameStore.set({ hud, hud2: this.buildHud(this.player2, this.cameraRig2, this.playerDrs2) })
+    else gameStore.set({ hud })
+  }
+
+  /** HUD snapshot from one player's point of view: "isPlayer" marks that player's own car. */
+  private buildHud(player: Vehicle, rig: CameraRig, drs: 'none' | 'available' | 'active'): HudState {
     const race = this.race!
-    const player = this.player!
     const t = player.telemetry
-    const r = race.player
-    const standings: HudStanding[] = race.standings().map((s) => ({ id: s.vehicleId, name: s.name, position: s.position, gap: s.gap, isPlayer: s.isPlayer, carId: s.carId, finished: s.finished, eliminated: s.eliminated, color: this.vehicles[s.vehicleId]?.color ?? '#fff', lap: s.lap }))
-    const minimap: MinimapCar[] = this.vehicles.map((v) => ({ x: v.position.x, z: v.position.z, yaw: Math.atan2(v.controller.forward.x, v.controller.forward.z), isPlayer: v.isPlayer, color: v.color }))
+    const r = race.racers.get(player.id)
+    const standings: HudStanding[] = race.standings().map((s) => ({ id: s.vehicleId, name: s.name, position: s.position, gap: s.gap, isPlayer: s.vehicleId === player.id, carId: s.carId, finished: s.finished, eliminated: s.eliminated, color: this.vehicles[s.vehicleId]?.color ?? '#fff', lap: s.lap }))
+    const minimap: MinimapCar[] = this.vehicles.map((v) => ({ x: v.position.x, z: v.position.z, yaw: Math.atan2(v.controller.forward.x, v.controller.forward.z), isPlayer: v.id === player.id, color: v.color }))
     let ghostDelta: number | null = null
     if (this.ghost && r) ghostDelta = null
-    gameStore.set({
-      hud: {
+    return {
         speedKmh: t.speedKmh,
         rpm: t.rpm,
         redline: player.tuned.engine.redline,
@@ -1328,8 +1382,8 @@ export class Engine {
         fps: this.qualityManager.fps,
         inPit: r?.inPit ?? false,
         pitLimiter: r?.inPitLane ?? false,
-        drs: this.playerDrs,
-        cameraMode: this.cameraRig.mode,
+        drs,
+        cameraMode: rig.mode,
         isNight: this.sky.nightFactor > 0.5,
         wetness: this.weather.state.wetness,
         gLat: t.gLat,
@@ -1338,13 +1392,146 @@ export class Engine {
         topSpeed: player.topSpeedKmh,
         mode: this.config?.mode ?? 'quick',
         seriesRound: this.seriesLabel(),
-      },
-    })
+    }
+  }
+
+  private drsFor(v: Vehicle): 'none' | 'available' | 'active' {
+    const race = this.race!
+    const track = this.track!
+    const pr = race.racers.get(v.id)
+    if (!pr || pr.inPitLane || !track.drsZones.length || !(race.phase === 'racing' || race.phase === 'freeroam')) return 'none'
+    const inZone = track.drsZones.some((z) => (z.from <= z.to ? pr.progress > z.from && pr.progress < z.to : pr.progress > z.from || pr.progress < z.to))
+    if (!inZone) return 'none'
+    const t = v.telemetry
+    return t.speedKmh > 80 && v.input.throttle > 0.85 && v.input.brake < 0.1 && !t.airborne ? 'active' : 'available'
+  }
+
+  private cameraTargetFor(v: Vehicle, eye: THREE.Vector3 | null): CameraTarget {
+    const t = v.telemetry
+    return {
+      position: v.visual.root.position,
+      quaternion: v.visual.root.quaternion,
+      velocity: v.controller.velocity,
+      forward: v.controller.forward,
+      up: v.controller.up,
+      speedKmh: t.speedKmh,
+      gLat: t.gLat,
+      gLong: t.gLong,
+      boosting: t.nitroActive,
+      bodyHeight: v.spec.body.height,
+      bodyLength: v.spec.body.length,
+      cockpitOffset: eye
+        ? eye
+        : v.spec.model
+        ? new THREE.Vector3(v.spec.model.cockpitEye[0], v.spec.model.cockpitEye[1] - v.spec.comHeight, v.spec.model.cockpitEye[2])
+        : v.spec.body.shape === 'formula'
+          ? new THREE.Vector3(0, 0.54, 0.02)
+          : new THREE.Vector3(-0.35, v.spec.body.height * 0.55 - v.spec.comHeight + 0.35, v.spec.body.length * 0.05),
+      hoodOffset: v.spec.model
+        ? new THREE.Vector3(v.spec.model.tcam[0], v.spec.model.tcam[1] - v.spec.comHeight, v.spec.model.tcam[2])
+        : v.spec.body.shape === 'formula' ? new THREE.Vector3(0, 1.02 - v.spec.comHeight, -0.3) : undefined,
+    }
+  }
+
+  private wheelTelemetryFor(v: Vehicle, drs: 'none' | 'available' | 'active'): WheelTelemetry {
+    const t = v.telemetry
+    return {
+      steerAngle: t.steerAngle,
+      maxSteerAngle: THREE.MathUtils.degToRad(v.spec.steering.maxAngle),
+      gear: t.gear,
+      speedKmh: t.speedKmh,
+      rpm: t.rpm,
+      redline: v.tuned.engine.redline,
+      limiter: t.limiter,
+      units: this.settings.controls.units,
+      ers: v.controller.getNitroFraction(),
+      ersMode: t.nitroActive ? 'deploy' : t.harvesting ? 'harvest' : 'idle',
+      drs,
+      pitLimiter: this.race?.racers.get(v.id)?.inPitLane ?? false,
+    }
+  }
+
+  /**
+   * Hide each player's own occluding bodywork only for the viewport that looks
+   * out of that car's cockpit. `view` is the viewport about to be rendered.
+   */
+  private applyCockpitVisibility(view: 0 | 1): void {
+    const p1Cockpit = this.cameraRig.mode === 'cockpit' && view === 0
+    const p2Cockpit = this.cameraRig2.mode === 'cockpit' && view === 1
+    if (this.player) {
+      for (const o of this.player.visual.cockpitHidden) o.visible = !p1Cockpit
+      for (const o of this.cockpitExtraHidden) o.visible = !p1Cockpit
+    }
+    if (this.player2) {
+      for (const o of this.player2.visual.cockpitHidden) o.visible = !p2Cockpit
+      for (const o of this.cockpitExtraHidden2) o.visible = !p2Cockpit
+    }
+  }
+
+  /** Camera aspect ratios for the current layout (full frame, or each split viewport). */
+  private updateAspects(): void {
+    const w = window.innerWidth
+    const h = window.innerHeight
+    const a = this.splitActive() ? (this.split === 'stack' ? w / (h / 2) : (w / 2) / h) : w / h
+    if (a === this.lastAspect) return
+    this.lastAspect = a
+    this.cameraRig.resize(a)
+    this.cameraRig2.resize(a)
+  }
+
+  private splitActive(): boolean {
+    return this.split !== 'none' && !!this.player2 && this.mode === 'race' && !gameStore.get().photo.active
+  }
+
+  /**
+   * Two viewports cost roughly two scenes per frame, so split screen drops the
+   * screen-space post effects (drawn straight to the canvas instead of through
+   * the composer), caps the render scale and trims shadows and particles.
+   */
+  private applySplitQuality(): void {
+    const q = this.quality
+    if (this.split !== 'none') {
+      this.qualityManager.setMaxScale(Math.min(q.resolutionScale, 0.8))
+      this.sky.configureShadows(Math.min(q.shadowMapSize, 1024), Math.min(q.shadowDistance, 60), q.shadowsEnabled)
+      this.particles.setBudget(Math.round(q.particleBudget * 0.6))
+    } else {
+      this.qualityManager.setMaxScale(q.resolutionScale)
+      this.sky.configureShadows(q.shadowMapSize, q.shadowDistance, q.shadowsEnabled)
+      this.particles.setBudget(q.particleBudget)
+    }
+    this.applyResolution(this.qualityManager.scale)
   }
 
   private renderFrame(dt: number): void {
     this.colliderDebug?.update()
-    this.post.render(dt)
+    this.updateAspects()
+    if (!this.splitActive()) {
+      this.post.render(dt)
+      return
+    }
+    const r = this.renderer
+    const size = r.getSize(_viewSize)
+    const w = size.x
+    const h = size.y
+    // WebGL viewports count from the bottom: player 1 takes the top (or left) half.
+    const views: [number, number, number, number][] = this.split === 'stack'
+      ? [[0, Math.floor(h / 2), w, Math.ceil(h / 2)], [0, 0, w, Math.floor(h / 2)]]
+      : [[0, 0, Math.floor(w / 2), h], [Math.floor(w / 2), 0, Math.ceil(w / 2), h]]
+    const rigs = [this.cameraRig, this.cameraRig2]
+    r.setScissorTest(true)
+    for (const i of [0, 1] as const) {
+      const [x, y, vw, vh] = views[i]
+      r.setViewport(x, y, vw, vh)
+      r.setScissor(x, y, vw, vh)
+      this.applyCockpitVisibility(i)
+      this.cockpitWheel?.setVisible(i === 0 && this.cameraRig.mode === 'cockpit')
+      this.cockpitWheel2?.setVisible(i === 1 && this.cameraRig2.mode === 'cockpit')
+      r.render(this.scene, rigs[i].camera)
+    }
+    r.setScissorTest(false)
+    r.setViewport(0, 0, w, h)
+    r.setScissor(0, 0, w, h)
+    this.applyCockpitVisibility(0)
   }
 
   /** Draw (or hide) every physics collider as wireframe over the scene. */
