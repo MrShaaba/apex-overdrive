@@ -190,8 +190,11 @@ The boards themselves are `src/game/tracks/Billboards.ts`: a TrackDefinition wit
 evenly over the zones (normalised lap parameter, side 1 / -1 / 'alternate'), skipping tunnels,
 bridges and the pit side of the pit lane, at least 5.5 m outside the road edge, stepped outward or
 shifted along the lap when the verge is not flat or the circuit model's own scenery and walls
-occupy the footprint. Photos are used in lap order so all of them appear before any repeats; the
-panel photos go through `TextureFactory.image()` and are released with the track. No stock
+occupy the footprint. Photos are dealt around the boards in order from a cursor kept in localStorage
+(`apex.photos.cursor:<set>`), so a set larger than the number of boards is shown in full: once the
+player is 220 m past a board (and 450 m short of reaching it again) it quietly takes the next photo
+in the queue, and no photo is ever on two boards at once when photos outnumber boards; the panel
+photos go through `TextureFactory.image()` and are released with the track. No stock
 circuit sets the field. **Sepang International Circuit - Fam Jam** (`sepang-fam-jam`) is the
 one variant: it clones the Sepang entry (same points, model and features) and adds 24 boards.
 Sepang was chosen after probing every licensed circuit for hoarding sight lines — it has the

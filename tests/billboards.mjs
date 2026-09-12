@@ -57,7 +57,8 @@ const waitRacing = (page) => page.waitForFunction(() => window.__apex.race && wi
     })
     const names = {}
     bb.root.children.forEach((o) => { names[o.name] = (names[o.name] ?? 0) + 1 })
-    return { count: placed.length, placed, names, lap: Math.round(sp.length), name: t.def.name, photos: new Set(placed.map((p) => p.photo)).size }
+    const set = window.__apex.track.billboards.set
+    return { count: placed.length, placed, names, lap: Math.round(sp.length), name: t.def.name, setSize: set.photos.length, captioned: set.photos.filter((p) => p.caption).length }
   })
   check(!!info, 'track builds a billboards result')
   if (info) {
@@ -68,10 +69,10 @@ const waitRacing = (page) => page.waitForFunction(() => window.__apex.race && wi
     check(info.placed.every((p) => !p.inPit), 'no board on the pit side of the pit lane')
     const gaps = info.placed.slice(1).map((p, i) => p.dist - info.placed[i].dist)
     check(gaps.every((g) => g >= 90), `boards at least 90 m apart (min ${Math.min(...gaps)} m)`)
-    const n = info.photos
-    const cycles = info.placed.every((p, i) => p.photo === -1 || p.photo === i % n)
-    check(cycles, `photos cycle through all ${n} before repeating`)
+    const photos = info.placed.map((p) => p.photo)
+    check(new Set(photos).size === Math.min(info.count, info.setSize), `no photo on two boards at once (${new Set(photos).size} distinct on ${info.count} boards, set of ${info.setSize})`)
     check(info.names['billboard-frame'] > 0 && info.names['billboard-panel'] > 0, 'frame and panel instanced meshes present')
+    check((info.names['billboard-caption'] ?? 0) === (info.captioned ? info.names['billboard-panel'] : 0) || info.captioned, `caption strips only where photos have captions (${info.names['billboard-caption'] ?? 0} strips, ${info.captioned} captioned photos)`)
     // Colliders: a prop collider sits where each board's frame is, and none reaches the road.
     const col = await page.evaluate(() => {
       const a = window.__apex, t = a.track, world = a.physics.world, R = a.physics.RAPIER
@@ -118,12 +119,39 @@ const waitRacing = (page) => page.waitForFunction(() => window.__apex.race && wi
   })
   await wait(1000)
   await page.screenshot({ path: 'tests/shots/billboards-closeup.png' })
+  await page.evaluate(() => { window.__apex.sky.hour = 22 })
+  await wait(700)
+  await page.screenshot({ path: 'tests/shots/billboards-closeup-night.png' })
+  await page.evaluate(() => { window.__apex.sky.hour = 13 })
   // Texture lifecycle: photos and captions live in the TextureFactory cache while the
   // track is loaded and are released with it.
   const keys = () => page.evaluate(() => { const c = window.__apex.textures.cache; const ks = [...c.keys()]; return { image: ks.filter((k) => k.startsWith('image:')).length, caption: ks.filter((k) => k.startsWith('caption:')).length, loaded: ks.filter((k) => k.startsWith('image:')).filter((k) => c.get(k).texture.image && c.get(k).texture.image.width > 2).length } })
   const during = await keys()
-  check(during.image >= 1 && during.caption >= 1, `photo and caption textures cached while racing (${during.image} images, ${during.caption} captions)`)
+  check(during.image >= 1, `photo textures cached while racing (${during.image} images, ${during.caption} captions)`)
   check(during.loaded === during.image, `every photo texture finished loading (${during.loaded}/${during.image})`)
+  // Rotation: drive (teleport) round the lap twice; boards left well behind take the next
+  // photo, no photo is ever on two boards at once, and the whole set gets shown.
+  const rot = await page.evaluate(async () => {
+    const a = window.__apex, t = a.track, bb = t.billboards, sp = t.spline
+    const n = bb.set.photos.length
+    const before = bb.placed.map((b) => b.photo)
+    let dupes = 0, swaps = 0
+    for (let d = 0; d < sp.length * 2.2; d += 150) {
+      const s = t.spawnPose(d % sp.length, 0)
+      a.player.respawn(s.position, s.quaternion)
+      await new Promise((r) => setTimeout(r, 120))
+      const now = bb.placed.map((b) => b.photo)
+      if (new Set(now).size < Math.min(now.length, n)) dupes++
+      swaps += now.filter((p, i) => p !== before[i]).length
+      before.splice(0, before.length, ...now)
+    }
+    return { n, boards: bb.placed.length, shown: bb.shown.size, dupes, swaps, cursor: bb.cursor, stored: localStorage.getItem('apex.photos.cursor:' + bb.set.folder) }
+  })
+  console.log(`rotation: ${rot.n} photos on ${rot.boards} boards, ${rot.swaps} swaps over 2.2 laps, ${rot.shown} distinct photos shown, cursor ${rot.cursor} (stored ${rot.stored})`)
+  check(rot.swaps >= rot.boards, 'boards take new photos as the player laps')
+  check(rot.dupes === 0, 'no photo on two boards at once at any point')
+  check(rot.shown === rot.n, `every photo in the set was shown (${rot.shown}/${rot.n})`)
+  check(String(rot.cursor) === rot.stored, 'photo cursor persisted for the next session')
   await page.evaluate(() => window.__apex.quitToMenu())
   await page.waitForFunction(() => window.__apex.mode === 'showcase', { timeout: 60000 })
   const after = await keys()

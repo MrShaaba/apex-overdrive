@@ -6,8 +6,13 @@
  * to face the road and angled toward approaching cars, with a caption strip
  * along the bottom and a light bar that backlights it at night. Boards are
  * spread around the lap with deterministic spacing, skipping the pit lane,
- * tunnels and bridges, kept clear of the racing line and of existing scenery,
- * and cycle through every photo of the set before any repeats.
+ * tunnels and bridges, kept clear of the racing line and of existing scenery.
+ *
+ * Photos rotate: the set is dealt around the boards in order from a cursor that
+ * persists between sessions, and once the player has driven well past a board it
+ * quietly takes the next photo in the queue before the next lap reaches it, so a
+ * set larger than the number of boards is shown in full over a lap or two and no
+ * photo sits on two boards that could be in view together.
  *
  * Everything is instanced per spatial chunk like the rest of the scenery, the
  * legs and frame carry prop colliders (so a car cannot drive through them, but
@@ -39,8 +44,14 @@ export interface BillboardSet {
 
 export interface BillboardsResult {
   root: THREE.Group
-  /** Boards actually placed, in lap order. */
+  /** Boards actually placed, in lap order; `photo` is live and changes as boards rotate. */
   placed: { position: THREE.Vector3; distance: number; side: number; photo: number }[]
+  /** The photo set in use (empty when the manifest is missing). */
+  set: BillboardSet
+  /** Every photo index that has been on a board this session. */
+  shown: Set<number>
+  /** Next photo the queue will deal (persisted per set between sessions). */
+  readonly cursor: number
   updateVisibility(cameraPos: THREE.Vector3, drawDistance: number): void
   setNight(nightFactor: number): void
   dispose(): void
@@ -58,6 +69,24 @@ export interface BillboardSite {
 }
 
 export const DEFAULT_PHOTO_SET = 'assets/photos/fam-jam'
+
+const cursorKey = (folder: string) => `apex.photos.cursor:${folder}`
+function loadCursor(folder: string, count: number): number {
+  if (count <= 0) return 0
+  try {
+    const v = Number(localStorage.getItem(cursorKey(folder)))
+    return Number.isFinite(v) && v >= 0 ? Math.floor(v) % count : 0
+  } catch {
+    return 0
+  }
+}
+function saveCursor(folder: string, cursor: number): void {
+  try {
+    localStorage.setItem(cursorKey(folder), String(cursor))
+  } catch {
+    /* private mode or storage disabled: rotation still works within the session */
+  }
+}
 
 // Hoarding dimensions (metres).
 const PANEL_W = 9.6
@@ -287,8 +316,8 @@ export function buildBillboards(
 
   const spacingM = spline.length / Math.max(1, slots.length)
   const photoCount = set.photos.length
-  let photoIdx = 0
-  const boards: { p: THREE.Vector3; q: THREE.Quaternion; photo: number; dist: number; side: number }[] = []
+  interface Board { p: THREE.Vector3; q: THREE.Quaternion; photo: number; dist: number; side: number; position: THREE.Vector3; distance: number; seen: boolean }
+  const boards: Board[] = []
   for (const slot of slots) {
     let hit: ReturnType<typeof tryPlace> = null
     let dist = slot.dist
@@ -300,10 +329,38 @@ export function buildBillboards(
     if (!hit) continue
     // Keep boards apart: a shifted slot must not crowd its neighbour.
     if (boards.some((b) => b.p.distanceTo(hit!.p) < 40)) continue
-    const photo = photoCount ? photoIdx++ % photoCount : -1
-    boards.push({ p: hit.p, q: hit.q, photo, dist, side: slot.side })
-    placed.push({ position: hit.p, distance: dist, side: slot.side, photo })
+    boards.push({ p: hit.p, q: hit.q, photo: -1, dist, side: slot.side, position: hit.p, distance: dist, seen: false })
   }
+  // The placed list shares the board objects, so `photo` stays live as boards rotate.
+  placed.push(...boards)
+
+  // Deal photos from the persisted cursor: consecutive boards get consecutive photos, so
+  // with more photos than boards the whole set is distinct around the lap, and the next
+  // session (or the next lap, see updateVisibility) continues where this one stops.
+  const shown = new Set<number>()
+  let cursor = loadCursor(set.folder, photoCount)
+  const lapLen = spline.length
+  const lapGap = (a: number, b: number) => { const d = Math.abs(a - b) % lapLen; return Math.min(d, lapLen - d) }
+  /**
+   * Next photo for `board`: the queue head, skipping any photo already on another board
+   * when the set is bigger than the grid of boards (so no photo is ever up twice), or
+   * one on a board within 600 m when it is not (duplicates then have to exist somewhere).
+   */
+  const dealTo = (board: Board) => {
+    if (!photoCount) return
+    const strict = photoCount > boards.length
+    let pick = cursor
+    for (let tries = 0; tries < photoCount; tries++) {
+      const candidate = (cursor + tries) % photoCount
+      const clash = boards.some((o) => o !== board && o.photo === candidate && (strict || lapGap(o.dist, board.dist) < 600))
+      if (!clash) { pick = candidate; break }
+    }
+    board.photo = pick
+    shown.add(pick)
+    cursor = (pick + 1) % photoCount
+    saveCursor(set.folder, cursor)
+  }
+  for (const b of boards) dealTo(b)
 
   // --- Geometry --------------------------------------------------------------------
   // Frame: a slab behind the panel plus two legs, in the board's local space
@@ -358,35 +415,51 @@ export function buildBillboards(
   }
 
   // --- Instancing per chunk --------------------------------------------------------
-  const byChunk = new Map<Chunk, typeof boards>()
+  const byChunk = new Map<Chunk, Board[]>()
   for (const b of boards) {
     const c = chunkFor(b.p)
     ;(byChunk.get(c) ?? byChunk.set(c, []).get(c)!).push(b)
   }
   const one = new THREE.Vector3(1, 1, 1)
-  const matrixOf = (b: (typeof boards)[number]) => new THREE.Matrix4().compose(b.p, b.q, one)
-  const addInstanced = (chunk: Chunk, geo: THREE.BufferGeometry, mat: THREE.Material, list: typeof boards, cast: boolean, name: string) => {
+  const matrixOf = (b: Board) => new THREE.Matrix4().compose(b.p, b.q, one)
+  const addInstanced = (chunk: Chunk, geo: THREE.BufferGeometry, mat: THREE.Material, list: Board[], cast: boolean, name: string) => {
     const inst = new THREE.InstancedMesh(geo, mat, list.length)
     list.forEach((b, i) => inst.setMatrixAt(i, matrixOf(b)))
     inst.instanceMatrix.needsUpdate = true
     inst.castShadow = cast
     inst.receiveShadow = true
     inst.name = name
+    inst.visible = chunk.meshes[0]?.visible ?? true
     root.add(inst)
     chunk.meshes.push(inst)
     chunk.radius = Math.max(chunk.radius, 160)
+    return inst
   }
   for (const [chunk, list] of byChunk) {
     addInstanced(chunk, frameGeo, frameMat, list, true, 'billboard-frame')
     addInstanced(chunk, lampGeo, lampMat, list, false, 'billboard-lamp')
-    const byPhoto = new Map<number, typeof boards>()
-    for (const b of list) (byPhoto.get(b.photo) ?? byPhoto.set(b.photo, []).get(b.photo)!).push(b)
-    for (const [photo, group] of byPhoto) {
-      addInstanced(chunk, panelGeo, panelMaterial(photo), group, false, 'billboard-panel')
-      const cm = captionMaterial(photo)
-      if (cm) addInstanced(chunk, captionGeo, cm, group, false, 'billboard-caption')
+  }
+  // Panels and captions are rebuilt whenever a board takes a new photo (a few small
+  // instanced meshes; geometry and materials are shared and survive the rebuild).
+  const faceMeshes: { inst: THREE.InstancedMesh; chunk: Chunk }[] = []
+  const rebuildFaces = () => {
+    for (const { inst, chunk } of faceMeshes) {
+      root.remove(inst)
+      chunk.meshes.splice(chunk.meshes.indexOf(inst), 1)
+      inst.dispose()
+    }
+    faceMeshes.length = 0
+    for (const [chunk, list] of byChunk) {
+      const byPhoto = new Map<number, Board[]>()
+      for (const b of list) (byPhoto.get(b.photo) ?? byPhoto.set(b.photo, []).get(b.photo)!).push(b)
+      for (const [photo, group] of byPhoto) {
+        faceMeshes.push({ inst: addInstanced(chunk, panelGeo, panelMaterial(photo), group, false, 'billboard-panel'), chunk })
+        const cm = captionMaterial(photo)
+        if (cm) faceMeshes.push({ inst: addInstanced(chunk, captionGeo, cm, group, false, 'billboard-caption'), chunk })
+      }
     }
   }
+  rebuildFaces()
 
   // --- Colliders: legs and frame, so a car stops at the posts but nothing invisible
   // sits nearer the road than the visible board itself. ------------------------------
@@ -408,14 +481,43 @@ export function buildBillboards(
   log.info(`${def.name}: ${boards.length} of ${slots.length} billboard slots placed, ${photoCount} photo(s)${grid.vertices ? `, scenery grid ${grid.vertices} vertices` : ''}`)
 
   const chunkList = [...chunks.values()]
+  let lapHint: number | undefined
   return {
     root,
     placed,
+    set,
+    shown,
+    get cursor() {
+      return cursor
+    },
     updateVisibility(cameraPos, drawDistance) {
       for (const c of chunkList) {
         const d = Math.hypot(c.center.x - cameraPos.x, c.center.z - cameraPos.z) - c.radius
         const visible = d < drawDistance
         for (const m of c.meshes) m.visible = visible
+      }
+      // Rotation: a board the camera has approached takes the next photo once the camera is
+      // at least 220 m past it along the lap and still 450 m short of reaching it again —
+      // out of sight either way, even looking back.
+      if (photoCount > boards.length || (photoCount > 1 && boards.length > 1)) {
+        let prog = spline.progressAt(cameraPos, lapHint)
+        // The hinted search only looks a few samples either way; after a respawn or a camera
+        // cut it can settle on the wrong stretch, so fall back to a full search when it is off.
+        if (lapHint !== undefined && spline.samples[prog.index].position.distanceTo(cameraPos) > 45) prog = spline.progressAt(cameraPos)
+        lapHint = prog.index
+        let dirty = false
+        for (const b of boards) {
+          const behind = (((prog.distance - b.dist) % lapLen) + lapLen) % lapLen
+          if (behind < 60 || behind > lapLen - 300) b.seen = true
+          else if (b.seen && behind > 220 && behind < lapLen - 450) {
+            b.seen = false
+            if (photoCount > 1) {
+              dealTo(b)
+              dirty = true
+            }
+          }
+        }
+        if (dirty) rebuildFaces()
       }
     },
     setNight(nightFactor) {
