@@ -336,7 +336,8 @@ export function buildBillboards(
   const panelMaterial = (photo: number): THREE.MeshStandardMaterial => {
     let m = panelMats.get(photo)
     if (m) return m
-    const map = blankTex
+    const entry = photo >= 0 ? set.photos[photo] : null
+    const map = entry ? textures.image(`${set.folder}/${entry.file}`, blankTex) : blankTex
     m = new THREE.MeshStandardMaterial({ map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0, roughness: 0.55, metalness: 0 })
     panelMats.set(photo, m)
     nightMats.push(m)

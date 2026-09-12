@@ -7,10 +7,17 @@
  * released with `releaseUnused()` when a track is unloaded so GPU memory stays
  * bounded. Optional `public/assets/textures/*.jpg` overrides are picked up if a
  * matching file exists in the manifest (see docs/ASSET_PIPELINE.md).
+ *
+ * `image()` loads an image file into the same cache: same keying, same
+ * `releaseUnused()` lifecycle, so photos on a track's billboards are freed with
+ * the rest of that track's textures.
  */
+
+const log = Logger.scope('Textures')
 
 import * as THREE from 'three'
 import { createRng, fbm2D, hashString } from '../core/MathUtils'
+import { Logger } from '../core/Logger'
 import type { LiveryStyle, VehicleCustomization } from '../vehicles/VehicleSpec'
 
 type Painter = (ctx: CanvasRenderingContext2D, size: number, rng: () => number) => void
@@ -111,6 +118,56 @@ export class TextureFactory {
 
   releaseAll(): void {
     for (const key of [...this.cache.keys()]) this.release(key)
+  }
+
+  /**
+   * An image file under the app base URL as a texture, cached and released like the
+   * painted ones. Returns at once showing `placeholder`'s image (or a grey pixel) and
+   * swaps the file in when it has loaded; a missing or broken file keeps the
+   * placeholder and logs once. sRGB, mipmapped, with the factory's anisotropy.
+   */
+  image(file: string, placeholder?: THREE.Texture): THREE.Texture {
+    const key = `image:${file}`
+    const hit = this.cache.get(key)
+    if (hit) {
+      hit.lastUsed = this.frame
+      return hit.texture
+    }
+    const tex = new THREE.Texture(placeholder?.image ?? this.greyPixel())
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping
+    tex.anisotropy = this.anisotropy
+    tex.generateMipmaps = true
+    tex.minFilter = THREE.LinearMipmapLinearFilter
+    tex.magFilter = THREE.LinearFilter
+    tex.needsUpdate = true
+    const entry: CacheEntry = { texture: tex, lastUsed: this.frame, bytes: 4 }
+    this.cache.set(key, entry)
+    this.bytes += entry.bytes
+    const url = `${import.meta.env.BASE_URL}${file.replace(/^\/+/, '')}`
+    new THREE.ImageLoader().load(
+      url,
+      (img) => {
+        if (this.cache.get(key) !== entry) return // released while it was loading
+        tex.image = img
+        tex.needsUpdate = true
+        const bytes = img.width * img.height * 4 * 1.33
+        this.bytes += bytes - entry.bytes
+        entry.bytes = bytes
+      },
+      undefined,
+      () => {
+        if (this.cache.get(key) === entry) log.warn(`Image ${file} failed to load — placeholder kept`)
+      },
+    )
+    return tex
+  }
+
+  private greyPixel(): HTMLCanvasElement {
+    const [c, ctx] = this.makeCanvas(2)
+    ctx.fillStyle = '#9a9c9e'
+    ctx.fillRect(0, 0, 2, 2)
+    return c
   }
 
   // ---------------------------------------------------------------------------
