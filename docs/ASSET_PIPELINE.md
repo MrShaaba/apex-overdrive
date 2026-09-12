@@ -172,6 +172,17 @@ Integration points:
 * **Audio** — `AudioEngine` accepts decoded `AudioBuffer`s for one-shots; replace
   `playImpact`/`playGearShift` bodies with buffer playback.
 
+## Family photos (Fam Jam billboards)
+`node tools/asset-pipeline/prepare-photos.mjs [~/Downloads/fam-jam] [--out dir] [--width 1024]`
+(also `npm run assets:photos`) reads every jpg/jpeg/png in the source folder, takes the caption
+from the file name (`Beach_day_2024.jpg` → "Beach day 2024"), honours EXIF orientation, fits each
+photo into a 16:9 frame 1024 px wide (wider photos are centre-cropped, portrait/square/4:3 ones
+letterboxed on a dark background), and writes web JPEGs plus `manifest.json`
+(`{ photos: [{ file, caption }] }`) to `public/assets/photos/fam-jam/`. Unreadable files are
+skipped and listed in the summary. That folder is **gitignored**: the photos never enter the
+repository, and a track with `photoBillboards` still loads with blank boards when the manifest
+is missing or empty.
+
 ## Budgets (enforced by `npm run assets:validate`)
 | Type | Max per file | Notes |
 |---|---|---|

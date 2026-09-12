@@ -28,3 +28,6 @@ assets-src/
 
 # Headless test screenshots
 tests/shots/
+
+# Family photos for the Fam Jam billboards (built by tools/asset-pipeline/prepare-photos.mjs) — never committed
+public/assets/photos/
