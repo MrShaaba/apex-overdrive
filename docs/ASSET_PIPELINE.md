@@ -183,6 +183,22 @@ skipped and listed in the summary. That folder is **gitignored**: the photos nev
 repository, and a track with `photoBillboards` still loads with blank boards when the manifest
 is missing or empty.
 
+The boards themselves are `src/game/tracks/Billboards.ts`: a TrackDefinition with
+`photoBillboards: { count, zones?: [{ from, to, side }], set? }` gets that many hoardings spread
+evenly over the zones (normalised lap parameter, side 1 / -1 / 'alternate'), skipping tunnels,
+bridges and the pit side of the pit lane, at least 5.5 m outside the road edge, stepped outward or
+shifted along the lap when the verge is not flat or the circuit model's own scenery and walls
+occupy the footprint. Photos are used in lap order so all of them appear before any repeats; the
+panel photos go through `TextureFactory.image()` and are released with the track. No stock
+circuit sets the field. **Sepang International Circuit - Fam Jam** (`sepang-fam-jam`) is the
+one variant: it clones the Sepang entry (same points, model and features) and adds 24 boards.
+Sepang was chosen after probing every licensed circuit for hoarding sight lines — it has the
+widest verges (7.5 m mean half-width), the flattest lap (22 m of elevation), and the most
+candidate spots that are clear of the model's own scenery and visible from 60 and 120 m back
+along the road (18 of 24, against 11 at Spa and the Hungaroring and 3 at Marina Bay).
+`tests/billboards.mjs` checks placement, colliders, texture lifecycle, frame rate against plain
+Sepang and the blank-board fallback.
+
 ## Budgets (enforced by `npm run assets:validate`)
 | Type | Max per file | Notes |
 |---|---|---|

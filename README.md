@@ -37,7 +37,7 @@ Requirements: Node 18+, a browser with WebGL 2 + WebAssembly (Chrome, Edge, Fire
 | Hide HUD | N | — | — |
 | Pause | Esc / P | Start | ❚❚ |
 
-Racing wheels (Logitech G29 / G920 / G923 and similar) and several controllers are supported: calibrate and assign them to players in Options → Controls. Local two-player split screen (top/bottom or side by side) is in Race Setup → Players. Full list in [docs/CONTROLS.md](docs/CONTROLS.md).
+Racing wheels (Logitech G29 / G920 / G923 and similar) and several controllers are supported: calibrate and assign them to players in Options → Controls. Local two-player split screen (top/bottom or side by side) is in Race Setup → Players. **Sepang - Fam Jam** puts your own photos on trackside billboards: drop them in `~/Downloads/fam-jam` and run `npm run assets:photos` (see docs/ASSET_PIPELINE.md); without photos the boards are blank. Full list in [docs/CONTROLS.md](docs/CONTROLS.md).
 
 ## Project layout
 
