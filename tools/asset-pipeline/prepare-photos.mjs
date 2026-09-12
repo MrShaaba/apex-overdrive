@@ -6,10 +6,12 @@
  * gitignored like the rest of assets-src), derives a caption from the file name
  * (underscores → spaces, extension dropped) when the name is human-readable — camera
  * export names such as 066A08BA-…_1_105_c.jpeg, IMG_1234 or 20240512_183022 get no caption,
- * so the board shows the photo alone — fits each photo into a 16:9 frame 1024 px wide on a
- * dark background (a landscape photo is centre-cropped when it is wider than 16:9, a
- * portrait or square one is letterboxed) and writes web-friendly JPEGs plus a manifest to
- * public/assets/photos/fam-jam/.
+ * so the board shows the photo alone — fits each photo into a 16:9 frame 1024 px wide and
+ * writes web-friendly JPEGs plus a manifest to public/assets/photos/fam-jam/. A landscape
+ * photo wider than 16:9 is cropped with sharp's attention strategy (skin tones and detail
+ * decide the window, so faces stay in frame); a portrait, square or 4:3 photo is kept whole
+ * and letterboxed — the bars are a blurred, darkened copy of the same photo rather than flat
+ * black, so a phone portrait still fills the hoarding without anyone's head being cut off.
  *
  * Both folders are gitignored: the photos never enter the repository, and the game copes
  * with a missing or empty manifest by drawing blank boards (see Billboards.ts).
@@ -98,19 +100,32 @@ for (const file of candidates) {
     const meta = await image.metadata()
     if (!meta.width || !meta.height) throw new Error('no dimensions')
     const wide = meta.width / meta.height >= 16 / 9
-    // Landscape wider than 16:9: scale the height to fit and centre-crop the sides.
-    // Portrait / square / narrower landscape: scale the width or height to fit and letterbox.
-    const fitted = wide
-      ? image.resize({ width: WIDTH, height: HEIGHT, fit: 'cover', position: 'centre' })
-      : image.resize({ width: WIDTH, height: HEIGHT, fit: 'contain', background: BACKGROUND })
+    let fitted
+    if (wide) {
+      // Landscape wider than 16:9: scale the height to fit and crop the sides around the
+      // region with the most skin tone and detail (faces), not blindly around the centre.
+      fitted = image.resize({ width: WIDTH, height: HEIGHT, fit: 'cover', position: sharp.strategy.attention })
+    } else {
+      // Portrait / square / 4:3: the whole photo, scaled to fit, over a blurred and darkened
+      // copy of itself filling the rest of the frame (a letterbox that is not flat black).
+      const backdrop = await image.clone().resize({ width: WIDTH, height: HEIGHT, fit: 'cover', position: 'centre' }).blur(32).modulate({ brightness: 0.42, saturation: 0.75 }).toBuffer()
+      const photo = await image.clone().resize({ width: WIDTH, height: HEIGHT, fit: 'inside', withoutEnlargement: false }).toBuffer()
+      const pm = await sharp(photo).metadata()
+      const left = Math.round((WIDTH - pm.width) / 2), top = Math.round((HEIGHT - pm.height) / 2)
+      // A 3 px dark edge around the photo, clipped to the frame on the sides that touch it.
+      const ex = Math.max(0, left - 3), ey = Math.max(0, top - 3)
+      const ew = Math.min(WIDTH - ex, pm.width + 6), eh = Math.min(HEIGHT - ey, pm.height + 6)
+      const edge = await sharp({ create: { width: ew, height: eh, channels: 3, background: BACKGROUND } }).png().toBuffer()
+      fitted = sharp(backdrop).composite([{ input: edge, left: ex, top: ey }, { input: photo, left, top }])
+    }
     let name = `${slug(file)}.jpg`
     for (let n = 2; usedNames.has(name); n++) name = `${slug(file)}-${n}.jpg`
     usedNames.add(name)
-    await fitted.flatten({ background: BACKGROUND }).jpeg({ quality: 82, mozjpeg: true, chromaSubsampling: '4:2:0' }).toFile(path.join(OUT, name))
+    await fitted.flatten({ background: BACKGROUND }).jpeg({ quality: 84, mozjpeg: true, chromaSubsampling: '4:2:0' }).toFile(path.join(OUT, name))
     const bytes = fs.statSync(path.join(OUT, name)).size
     const text = caption(file)
     photos.push({ file: name, caption: text, width: WIDTH, height: HEIGHT, source: file, bytes })
-    console.log(`  ✓ ${file.padEnd(36)} ${String(meta.width).padStart(5)}×${String(meta.height).padEnd(5)} ${wide ? 'crop' : 'letterbox'} → ${name} (${(bytes / 1024).toFixed(0)} kB)  ${text ? `"${text}"` : '(no caption: export name)'}`)
+    console.log(`  ✓ ${file.padEnd(36)} ${String(meta.width).padStart(5)}×${String(meta.height).padEnd(5)} ${wide ? 'crop (attention)' : 'letterbox (blur fill)'} → ${name} (${(bytes / 1024).toFixed(0)} kB)  ${text ? `"${text}"` : '(no caption: export name)'}`)
   } catch (err) {
     skipped.push({ file, reason: err instanceof Error ? err.message.split('\n')[0] : String(err) })
     console.log(`  ✗ ${file.padEnd(36)} skipped: ${skipped[skipped.length - 1].reason}`)
