@@ -21,6 +21,7 @@ import type { ResolvedQuality } from '../core/Settings'
 import { clamp, fbm2D, hashString, lerp, smoothstep } from '../core/MathUtils'
 import { TrackSpline } from './Spline'
 import type { TrackDefinition, TrackFeature } from './TrackCatalog'
+import { buildBillboards, loadPhotoSet, type BillboardsResult } from './Billboards'
 import { HazardSystem } from './Hazards'
 import { modelLibrary } from '../vehicles/CarModelLoader'
 import { buildProps, type CrowdZone, type PropsResult } from './TrackProps'
@@ -75,6 +76,8 @@ export interface BuiltTrack {
   tracksideCameras: THREE.Vector3[]
   hazards: HazardSystem
   props: PropsResult
+  /** Photo billboards, when the definition asks for them. */
+  billboards: BillboardsResult | null
   minimap: MinimapData
   terrainHeight(x: number, z: number): number
   spawnPose(distance: number, lateral?: number): GridSlot
@@ -1126,6 +1129,15 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   for (const f of def.features) if (f.type === 'hazard') hazards.add(f, spline, halfWidth, terrainHeight)
   root.add(hazards.root)
 
+  // Photo billboards (opt-in per definition). The set is fetched here so a missing
+  // manifest simply means blank boards.
+  let billboards: BillboardsResult | null = null
+  if (def.photoBillboards) {
+    const set = await loadPhotoSet(def.photoBillboards.set)
+    billboards = buildBillboards(def, def.photoBillboards, set, spline, halfWidthAt, textures, physics, { pitZone, tunnelZones, onBridge, sceneRoot: root })
+    root.add(billboards.root)
+  }
+
   const minimapPoints: [number, number][] = spline.samples.filter((_, i) => i % 3 === 0).map((s) => [s.position.x, s.position.z])
   const mb = { minX: bounds.min.x, maxX: bounds.max.x, minZ: bounds.min.z, maxZ: bounds.max.z }
 
@@ -1148,6 +1160,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     tracksideCameras,
     hazards,
     props,
+    billboards,
     minimap: { points: minimapPoints, shortcuts: minimapShortcuts, bounds: mb, startPoint: [spline.samples[0].position.x, spline.samples[0].position.z] },
     terrainHeight,
     spawnPose,
@@ -1162,14 +1175,17 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
       if (snowMat) snowMat.opacity = snow * 0.85
       if (shoulderMat) shoulderMat.color.setScalar(1 - wetness * 0.25)
       props.setNight(nightFactor)
+      billboards?.setNight(nightFactor)
     },
     update(dt, cameraPos, drawDistance, time) {
       hazards.update(dt)
       props.updateVisibility(cameraPos, drawDistance, time)
+      billboards?.updateVisibility(cameraPos, drawDistance)
     },
     dispose() {
       hazards.dispose()
       props.dispose()
+      billboards?.dispose()
       releaseBodies()
       for (const d of disposables) d.dispose()
       root.clear()

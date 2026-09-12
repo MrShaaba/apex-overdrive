@@ -23,6 +23,8 @@ interface TextureOptions {
   anisotropy?: number
   mipmaps?: boolean
   fixedSize?: boolean
+  /** Canvas height when the texture is not square (defaults to the width). */
+  height?: number
 }
 
 interface CacheEntry {
@@ -58,10 +60,10 @@ export class TextureFactory {
     return this.bytes
   }
 
-  private makeCanvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  private makeCanvas(size: number, height = size): [HTMLCanvasElement, CanvasRenderingContext2D] {
     const c = document.createElement('canvas')
     c.width = size
-    c.height = size
+    c.height = height
     const ctx = c.getContext('2d')
     if (!ctx) throw new Error('2D canvas context unavailable')
     return [c, ctx]
@@ -76,7 +78,8 @@ export class TextureFactory {
     }
     const base = opts.size ?? 512
     const size = opts.fixedSize ? base : Math.max(64, Math.round(base * this.scale))
-    const [canvas, ctx] = this.makeCanvas(size)
+    const height = opts.height ? (opts.fixedSize ? opts.height : Math.max(16, Math.round(opts.height * this.scale))) : size
+    const [canvas, ctx] = this.makeCanvas(size, height)
     const rng = createRng(hashString(key))
     painter(ctx, size, rng)
     const tex = new THREE.CanvasTexture(canvas)
@@ -87,7 +90,7 @@ export class TextureFactory {
     tex.generateMipmaps = opts.mipmaps !== false
     tex.minFilter = opts.mipmaps === false ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter
     tex.needsUpdate = true
-    const bytes = size * size * 4 * 1.33
+    const bytes = size * height * 4 * 1.33
     this.cache.set(key, { texture: tex, lastUsed: this.frame, bytes })
     this.bytes += bytes
     return tex
@@ -343,6 +346,39 @@ export class TextureFactory {
       ctx.fillStyle = '#ffffff'
       ctx.fillText(text, size / 2, size / 2)
     }, { size: 256, wrap: false })
+  }
+
+  /** Plain light board for a billboard with no photo. */
+  blankBoard(): THREE.Texture {
+    return this.get('billboard:blank', (ctx, size) => {
+      this.noiseFill(ctx, size, [214, 216, 214], 6, 3, 5)
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)'
+      ctx.lineWidth = Math.max(2, size / 96)
+      ctx.strokeRect(size * 0.03, size * 0.03, size * 0.94, size * 0.94)
+    }, { size: 256, wrap: false })
+  }
+
+  /** Caption strip along the bottom of a billboard: light text on a dark band, 12:1. */
+  caption(text: string): THREE.Texture {
+    return this.get(`caption:${text}`, (ctx, size) => {
+      const h = ctx.canvas.height
+      ctx.fillStyle = '#111318'
+      ctx.fillRect(0, 0, size, h)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
+      ctx.fillRect(0, 0, size, Math.max(1, h * 0.04))
+      let px = h * 0.7
+      ctx.font = `700 ${px}px system-ui, "Helvetica Neue", Arial, sans-serif`
+      let label = text
+      while (ctx.measureText(label).width > size * 0.92 && px > h * 0.3) {
+        px *= 0.9
+        ctx.font = `700 ${px}px system-ui, "Helvetica Neue", Arial, sans-serif`
+      }
+      while (ctx.measureText(label).width > size * 0.92 && label.length > 4) label = label.slice(0, -2).trimEnd() + '…'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#f4f5f7'
+      ctx.fillText(label, size / 2, h * 0.53)
+    }, { size: 1024, height: 96, wrap: false, fixedSize: true })
   }
 
   plate(text: string): THREE.Texture {

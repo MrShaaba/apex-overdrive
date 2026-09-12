@@ -60,6 +60,19 @@ export interface TrackModelRef {
   credit: string
 }
 
+/**
+ * Photo billboards around the lap (tracks/Billboards.ts). Opt-in: absent on every
+ * stock circuit, so nothing changes for them.
+ */
+export interface PhotoBillboardConfig {
+  /** Folder of the photo set under the app base URL; 'assets/photos/fam-jam' when absent. */
+  set?: string
+  /** How many hoardings to spread around the lap. */
+  count: number
+  /** Roughly where along the lap (normalised 0..1) and on which side; the whole lap, alternating sides, when absent. */
+  zones?: { from: number; to: number; side: -1 | 1 | 'alternate' }[]
+}
+
 export interface TrackDefinition {
   id: string
   name: string
@@ -81,6 +94,8 @@ export interface TrackDefinition {
   /** Approximate length in km (display only, real value comes from the spline). */
   lengthKm: number
   bestLapReference: number
+  /** Trackside photo billboards; only Fam Jam variants set this. */
+  photoBillboards?: PhotoBillboardConfig
 }
 
 const env = (o: Partial<TrackEnvironment>): TrackEnvironment => ({
