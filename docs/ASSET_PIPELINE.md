@@ -173,9 +173,11 @@ Integration points:
   `playImpact`/`playGearShift` bodies with buffer playback.
 
 ## Family photos (Fam Jam billboards)
-`node tools/asset-pipeline/prepare-photos.mjs [~/Downloads/fam-jam] [--out dir] [--width 1024]`
+`node tools/asset-pipeline/prepare-photos.mjs [assets-src/photos/fam-jam] [--out dir] [--width 1024]`
 (also `npm run assets:photos`) reads every jpg/jpeg/png in the source folder, takes the caption
-from the file name (`Beach_day_2024.jpg` → "Beach day 2024"), honours EXIF orientation, fits each
+from the file name when it is human-readable (`Beach_day_2024.jpg` → "Beach day 2024"; camera
+export names such as `066A08BA-…_1_105_c.jpeg`, `IMG_1234` or `20240512_183022` get no caption and
+the board shows the photo alone — rename a file to caption it), honours EXIF orientation, fits each
 photo into a 16:9 frame 1024 px wide (wider photos are centre-cropped, portrait/square/4:3 ones
 letterboxed on a dark background), and writes web JPEGs plus `manifest.json`
 (`{ photos: [{ file, caption }] }`) to `public/assets/photos/fam-jam/`. Unreadable files are

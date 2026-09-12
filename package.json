@@ -13,7 +13,7 @@
     "test": "node tests/collider-audit.mjs && node tests/wheel-calibration.mjs && node tests/split-screen.mjs && node tests/billboards.mjs",
     "preview": "vite preview --host",
     "assets:manifest": "node tools/asset-pipeline/build-manifest.mjs",
-    "assets:photos": "node tools/asset-pipeline/prepare-photos.mjs",
+    "assets:photos": "node tools/asset-pipeline/prepare-photos.mjs assets-src/photos/fam-jam",
     "assets:validate": "node tools/asset-pipeline/validate.mjs"
   },
   "dependencies": {

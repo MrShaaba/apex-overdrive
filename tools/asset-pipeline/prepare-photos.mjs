@@ -2,14 +2,17 @@
 /**
  * Family photos for the Fam Jam billboards.
  *
- * Reads every jpg/jpeg/png in a source folder (default ~/Downloads/fam-jam), derives a
- * caption from the file name (underscores → spaces, extension dropped), fits each photo
- * into a 16:9 frame 1024 px wide on a dark background (a landscape photo is centre-cropped
- * when it is wider than 16:9, a portrait or square one is letterboxed) and writes
- * web-friendly JPEGs plus a manifest to public/assets/photos/fam-jam/.
+ * Reads every jpg/jpeg/png in a source folder (default assets-src/photos/fam-jam, which is
+ * gitignored like the rest of assets-src), derives a caption from the file name
+ * (underscores → spaces, extension dropped) when the name is human-readable — camera
+ * export names such as 066A08BA-…_1_105_c.jpeg, IMG_1234 or 20240512_183022 get no caption,
+ * so the board shows the photo alone — fits each photo into a 16:9 frame 1024 px wide on a
+ * dark background (a landscape photo is centre-cropped when it is wider than 16:9, a
+ * portrait or square one is letterboxed) and writes web-friendly JPEGs plus a manifest to
+ * public/assets/photos/fam-jam/.
  *
- * The output folder is gitignored: the photos never enter the repository, and the game
- * copes with a missing or empty manifest by drawing blank boards (see Billboards.ts).
+ * Both folders are gitignored: the photos never enter the repository, and the game copes
+ * with a missing or empty manifest by drawing blank boards (see Billboards.ts).
  *
  * Usage: node tools/asset-pipeline/prepare-photos.mjs [sourceDir] [--out <dir>] [--width 1024]
  */
@@ -29,15 +32,38 @@ const flag = (name, fallback) => {
 const OUT = path.resolve(flag('--out', 'public/assets/photos/fam-jam'))
 const WIDTH = Math.max(256, Number(flag('--width', '1024')) || 1024)
 const HEIGHT = Math.round((WIDTH * 9) / 16)
-const SRC = path.resolve((args[0] ?? '~/Downloads/fam-jam').replace(/^~(?=$|\/)/, os.homedir()))
+const SRC = path.resolve((args[0] ?? 'assets-src/photos/fam-jam').replace(/^~(?=$|\/)/, os.homedir()))
 const BACKGROUND = { r: 14, g: 15, b: 20 }
 
-const caption = (file) =>
-  path
-    .basename(file, path.extname(file))
+/**
+ * Is a file name something a person typed, rather than a camera or photo-library export?
+ * Export names: UUIDs (066A08BA-2E9A-4187-…_1_105_c), IMG_/DSC_/PXL_/MVIMG_/PANO_/DJI_/GOPR…
+ * followed by digits, date-time stamps (20240512_183022, 2024-05-12 18.30.22), bare hex or
+ * digit runs, or names with hardly any letters in them.
+ */
+const isHumanReadable = (stem) => {
+  const s = stem.trim()
+  if (!s) return false
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(s)) return false
+  if (/^(IMG|IMAG|DSC|DSCN|DSCF|DCIM|PXL|MVIMG|PANO|VID|MOV|DJI|GOPR|GP|SAM|CIMG|P|PICT|SDC|_MG|_DSC|Screenshot|Screen Shot|Photo|Image|Picture|Untitled|Scan|Capture|FullSizeRender|Resized|Snapchat|WhatsApp Image|Facetune|Copy of )[\s_\-]*\d*[\s_\-]*(\(\d+\))?(_\w+)?$/i.test(s)) return false
+  if (/^\d{4}[-_.]?\d{2}[-_.]?\d{2}[\s_\-T]*\d{0,2}[-_.:]?\d{0,2}[-_.:]?\d{0,2}/.test(s) && !/[a-z]{3,}/i.test(s)) return false
+  if (/^[0-9a-f\s_\-]+$/i.test(s) && /[0-9]/.test(s)) return false // hex / digit runs
+  if (/[0-9a-f]{8,}/i.test(s.replace(/[^0-9a-z]/gi, ''))) return false // long hex run inside
+  const letters = (s.match(/[a-z]/gi) ?? []).length
+  const words = s.split(/[\s_\-]+/).filter((w) => /[a-z]{3,}/i.test(w))
+  return words.length >= 1 && letters >= s.replace(/[\s_\-]/g, '').length * 0.5
+}
+
+/** Caption from a human-readable file name; empty for export names. */
+const caption = (file) => {
+  const stem = path.basename(file, path.extname(file))
+  if (!isHumanReadable(stem)) return ''
+  return stem
     .replace(/[_]+/g, ' ')
+    .replace(/(?<=[a-z0-9])-(?=[a-z0-9])/gi, ' ') // beach-day-2024 reads as a phrase too
     .replace(/\s+/g, ' ')
     .trim()
+}
 
 const slug = (file) =>
   path
@@ -82,8 +108,9 @@ for (const file of candidates) {
     usedNames.add(name)
     await fitted.flatten({ background: BACKGROUND }).jpeg({ quality: 82, mozjpeg: true, chromaSubsampling: '4:2:0' }).toFile(path.join(OUT, name))
     const bytes = fs.statSync(path.join(OUT, name)).size
-    photos.push({ file: name, caption: caption(file), width: WIDTH, height: HEIGHT, source: file, bytes })
-    console.log(`  ✓ ${file.padEnd(36)} ${String(meta.width).padStart(5)}×${String(meta.height).padEnd(5)} ${wide ? 'crop' : 'letterbox'} → ${name} (${(bytes / 1024).toFixed(0)} kB)  "${caption(file)}"`)
+    const text = caption(file)
+    photos.push({ file: name, caption: text, width: WIDTH, height: HEIGHT, source: file, bytes })
+    console.log(`  ✓ ${file.padEnd(36)} ${String(meta.width).padStart(5)}×${String(meta.height).padEnd(5)} ${wide ? 'crop' : 'letterbox'} → ${name} (${(bytes / 1024).toFixed(0)} kB)  ${text ? `"${text}"` : '(no caption: export name)'}`)
   } catch (err) {
     skipped.push({ file, reason: err instanceof Error ? err.message.split('\n')[0] : String(err) })
     console.log(`  ✗ ${file.padEnd(36)} skipped: ${skipped[skipped.length - 1].reason}`)
@@ -108,7 +135,11 @@ console.log('')
 console.log(`Source  ${SRC}`)
 console.log(`Output  ${OUT}`)
 console.log(`Processed ${photos.length} photo(s) into ${WIDTH}×${HEIGHT} JPEG (${(photos.reduce((s, p) => s + p.bytes, 0) / 1024).toFixed(0)} kB total)`)
-if (skipped.length) console.log(`Skipped ${skipped.length} unreadable: ${skipped.map((s) => s.file).join(', ')}`)
+if (skipped.length) console.log(`Skipped ${skipped.length} unreadable: ${skipped.map((s) => `${s.file} (${s.reason})`).join(', ')}`)
 if (ignored.length) console.log(`Ignored ${ignored.length} non-image: ${ignored.join(', ')}`)
+const captioned = photos.filter((p) => p.caption)
+const uncaptioned = photos.filter((p) => !p.caption)
+console.log(`Captions: ${captioned.length} from readable names${captioned.length ? ` (${captioned.map((p) => `${p.source} → "${p.caption}"`).join('; ')})` : ''}`)
+console.log(`No caption: ${uncaptioned.length} camera/export names${uncaptioned.length ? ` (${uncaptioned.map((p) => p.source).join(', ')})` : ''} — rename a file to a phrase such as Beach_day_2024.jpg to caption it`)
 console.log(`Manifest ${path.join(OUT, 'manifest.json')} (${manifest.photos.length} entries)`)
 if (!photos.length) console.log('No photos processed — the Fam Jam track will show blank boards.')
