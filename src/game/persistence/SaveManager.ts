@@ -113,7 +113,7 @@ export function createDefaultProfile(): PlayerProfile {
     ownedCars: ['dodge-charger'],
     selectedCar: 'dodge-charger',
     cars: {},
-    unlockedTracks: ['island-causeway', 'lakeside-circuit', 'woodland-raceway', 'drift-park'],
+    unlockedTracks: TRACK_CATALOG.filter((track) => track.unlockLevel <= 1).map((track) => track.id),
     career: { chapter: 0, completedEvents: [], eventStars: {} },
     stats: {
       racesEntered: 0,
@@ -226,10 +226,24 @@ export class SaveManager {
       current = m(current)
       log.info(`Migrated save v${from} → v${current.version}`)
     }
-    return { ...createDefaultProfile(), ...current, version: SAVE_VERSION }
+    const defaults = defaultSettings()
+    return {
+      ...createDefaultProfile(), ...current, version: SAVE_VERSION,
+      settings: {
+        graphics: { ...defaults.graphics, ...current.settings?.graphics },
+        audio: { ...defaults.audio, ...current.settings?.audio },
+        controls: { ...defaults.controls, ...current.settings?.controls },
+        gameplay: { ...defaults.gameplay, ...current.settings?.gameplay },
+      },
+    }
   }
 
   get(): PlayerProfile {
+    // A catalog extension is immediately available to eligible old and new saves.
+    // Preserve explicitly earned unlocks (career rewards), deriving level unlocks.
+    const unlocked = new Set(this.profile.unlockedTracks)
+    for (const track of TRACK_CATALOG) if (track.unlockLevel <= this.profile.level) unlocked.add(track.id)
+    if (unlocked.size !== this.profile.unlockedTracks.length) this.profile.unlockedTracks = [...unlocked]
     return this.profile
   }
 
@@ -261,6 +275,7 @@ export class SaveManager {
       await this.adapter.write(PROFILE_KEY, this.profile)
       bus.emit('save:written', { key: PROFILE_KEY })
     } catch (err) {
+      this.dirty = true
       log.error('Write failed', err)
     }
   }
@@ -290,8 +305,12 @@ export class SaveManager {
   async importJson(json: string): Promise<boolean> {
     try {
       const parsed = JSON.parse(json) as PlayerProfile
-      if (typeof parsed !== 'object' || !parsed.ownedCars) return false
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.ownedCars) ||
+        !parsed.ownedCars.every((id) => typeof id === 'string') ||
+        (parsed.unlockedTracks !== undefined && !Array.isArray(parsed.unlockedTracks)) ||
+        (parsed.level !== undefined && (!Number.isFinite(parsed.level) || parsed.level < 1))) return false
       this.profile = this.migrate(parsed)
+      this.get()
       this.dirty = true
       await this.flush()
       return true

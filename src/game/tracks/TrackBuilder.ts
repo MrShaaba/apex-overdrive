@@ -20,6 +20,7 @@ import type { TextureFactory } from '../render/TextureFactory'
 import type { ResolvedQuality } from '../core/Settings'
 import { clamp, fbm2D, hashString, lerp, smoothstep } from '../core/MathUtils'
 import { TrackSpline } from './Spline'
+import { repairRoadCentreline, visibleRoadSupport } from './RoadSafety'
 import type { TrackDefinition, TrackFeature } from './TrackCatalog'
 import { buildBillboards, loadPhotoSet, type BillboardsResult } from './Billboards'
 import { HazardSystem } from './Hazards'
@@ -206,27 +207,46 @@ function addTrimeshCollider(physics: PhysicsWorld, geometry: THREE.BufferGeometr
         local[k++] = m
       }
     }
-    const desc = physics.RAPIER.ColliderDesc.trimesh(new Float32Array(verts), local).setFriction(0.9).setCollisionGroups(groups)
+    // Weld adjacent triangle normals so low formula-car floors cannot catch
+    // internal edges on a visually continuous racing surface.
+    const desc = physics.RAPIER.ColliderDesc.trimesh(new Float32Array(verts), local, wall ? undefined : physics.RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
+      .setFriction(0.9).setRestitution(0).setCollisionGroups(groups)
     const col = physics.world.createCollider(desc, body)
     physics.registerCollider(col, { surface, wall })
   }
 }
 
-export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, textures: TextureFactory, quality: ResolvedQuality): Promise<BuiltTrack> {
+export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, textures: TextureFactory, quality: ResolvedQuality, onProgress?: (fraction: number) => void): Promise<BuiltTrack> {
+  physics.beginScope()
+  try {
+    const track = await buildTrackContents(def, physics, textures, quality, onProgress)
+    const releaseBodies = physics.endScope()
+    const disposeVisuals = track.dispose
+    track.dispose = () => { disposeVisuals(); releaseBodies() }
+    return track
+  } catch (error) {
+    // A failed build must never leave invisible colliders in the next session.
+    physics.endScope()()
+    throw error
+  }
+}
+
+async function buildTrackContents(def: TrackDefinition, physics: PhysicsWorld, textures: TextureFactory, quality: ResolvedQuality, onProgress?: (fraction: number) => void): Promise<BuiltTrack> {
   const t0 = performance.now()
-  physics.beginScope() // every body built below is removed again in dispose()
   const root = new THREE.Group()
   root.name = `track-${def.id}`
   const env = def.environment
   const points = def.points.map(([x, y, z]) => new THREE.Vector3(x, y, z))
-  const spline = new TrackSpline(points, def.closed, 2)
+  let spline = new TrackSpline(points, def.closed, 2)
   const halfWidth = def.width / 2
-  const halfWidthAt = (() => {
+  const catalogHalfWidthAt = (() => {
     const hw = def.halfWidths
     if (!hw || !hw.length) return () => halfWidth
     // Control points and spline samples are both uniform in arc length, so the index maps proportionally.
     return (i: number) => hw[Math.min(hw.length - 1, Math.round((spline.wrapIndex(i) / spline.count) * hw.length))]
   })()
+  let safeHalfWidths: Float32Array | null = null
+  const halfWidthAt = (index: number): number => safeHalfWidths?.[spline.wrapIndex(index)] ?? catalogHalfWidthAt(index)
   const disposables: (THREE.BufferGeometry | THREE.Material)[] = []
   const bounds = spline.bounds()
   const seed = hashString(def.id)
@@ -234,7 +254,7 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   // Licensed circuit: the file supplies road, terrain, walls and scenery and
   // the procedural surfaces/terrain/props are skipped. A missing file falls
   // back to the procedural build around the same centreline.
-  const modelTemplate = def.model && (await modelLibrary.preload(def.model.file)) ? modelLibrary.get(def.model.file) : null
+  const modelTemplate = def.model && (await modelLibrary.preload(def.model.file, onProgress)) ? modelLibrary.get(def.model.file) : null
   if (def.model && !modelTemplate) log.warn(`${def.name}: circuit model ${def.model.file} unavailable — building it procedurally`)
   const useModel = modelTemplate !== null
 
@@ -370,6 +390,45 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
       mount(name, surface, wall, cast)
       mount(`${name}_noshadow`, surface, wall, false)
     }
+    const support = visibleRoadSupport(model, spline, catalogHalfWidthAt)
+    if (support) {
+      addTrimeshCollider(physics, support, 'asphalt')
+      support.dispose()
+    }
+    // Exported road meshes can extend under barrier feet. Measure the actual
+    // barriers so the AI and grid do not mistake that geometry for usable lane.
+    physics.world.updateSceneQueries()
+    const repaired = repairRoadCentreline(points, physics, def.closed)
+    if (repaired.changed) {
+      spline = new TrackSpline(repaired.points, def.closed, 2)
+      log.info(`${def.name}: repaired ${repaired.changed} centreline points with insufficient barrier clearance`)
+    }
+    safeHalfWidths = new Float32Array(spline.count)
+    for (let i = 0; i < spline.count; i++) {
+      const sample = spline.samples[i]
+      let width = catalogHalfWidthAt(i)
+      for (const side of [-1, 1]) for (const height of [0.1, 0.35, 0.9]) {
+        const ray = new physics.RAPIER.Ray(
+          { x: sample.position.x, y: sample.position.y + height, z: sample.position.z },
+          { x: sample.right.x * side, y: 0, z: sample.right.z * side },
+        )
+        const hit = physics.world.castRay(ray, width, true, undefined, makeGroups(CollisionGroup.VEHICLE, CollisionGroup.PROP), undefined, undefined,
+          (collider) => physics.getMeta(collider.handle)?.wall === true)
+        if (hit && hit.timeOfImpact > 1) width = Math.min(width, Math.max(1.2, hit.timeOfImpact - 0.25))
+      }
+      const footprint = new physics.RAPIER.Cuboid(0.25, 0.65, 3)
+      const orientation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(sample.tangent.x, sample.tangent.z))
+      for (const side of [-1, 1]) for (let lateral = 1; lateral <= width; lateral += 0.5) {
+        const x = sample.position.x + sample.right.x * side * lateral, z = sample.position.z + sample.right.z * side * lateral
+        let blocked = false
+        physics.world.intersectionsWithShape({ x, y: sample.position.y + 0.65, z }, orientation, footprint, collider => {
+          if (physics.getMeta(collider.handle)?.wall) blocked = true
+          return !blocked
+        }, undefined, makeGroups(CollisionGroup.VEHICLE, CollisionGroup.PROP))
+        if (blocked) { width = Math.min(width, Math.max(1.2, lateral - 0.25)); break }
+      }
+      safeHalfWidths[i] = width
+    }
     // A wide grass apron under and beyond the model's terrain so a car that
     // runs off the map never falls through the world.
     const centre = bounds.getCenter(new THREE.Vector3())
@@ -438,15 +497,18 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
           heights[i * cols + j] = hits.length && hits[0].surface === 'asphalt' ? hits[0].y : NaN
           onAsphalt[i * cols + j] = hits.length && hits[0].surface === 'asphalt' ? 1 : 0
         }
+        // Read the original asphalt samples when bridging a gap. Reusing a
+        // previously filled column propagates the outside-bank height across
+        // the road and produces a metre-high ridge on banked ovals.
+        const asphaltHeights = heights.slice(i * cols, (i + 1) * cols)
         for (let j = 0; j < cols; j++) {
-          if (Number.isFinite(heights[i * cols + j])) continue
-          let ref = NaN
-          for (let k = 1; k < cols && !Number.isFinite(ref); k++) {
-            const l = heights[i * cols + j - k], r = heights[i * cols + j + k]
-            if (j - k >= 0 && Number.isFinite(l)) ref = l
-            else if (j + k < cols && Number.isFinite(r)) ref = r
-          }
-          if (!Number.isFinite(ref)) ref = s.position.y
+          if (Number.isFinite(asphaltHeights[j])) continue
+          let left = j - 1, right = j + 1
+          while (left >= 0 && !Number.isFinite(asphaltHeights[left])) left--
+          while (right < cols && !Number.isFinite(asphaltHeights[right])) right++
+          const ref = left >= 0 && right < cols
+            ? lerp(asphaltHeights[left], asphaltHeights[right], (j - left) / (right - left))
+            : left >= 0 ? asphaltHeights[left] : right < cols ? asphaltHeights[right] : s.position.y
           const own = ownTop[j], surface = ownSurface[j]
           if (!Number.isFinite(own)) heights[i * cols + j] = ref // a gap: cover it
           else if ((surface === 'concrete' || surface === 'curb') && own > ref - 0.1) heights[i * cols + j] = ref // paint, drain covers, kerb feet: road
@@ -517,18 +579,38 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
         }
       }
       const rowCount = def.closed ? rows : rows - 1
-      const index = new Uint32Array(rowCount * (cols - 1) * 6)
-      let k = 0
+      const index: number[] = []
+      const aPoint = new THREE.Vector3(), bPoint = new THREE.Vector3(), cPoint = new THREE.Vector3()
+      const normal = new THREE.Vector3(), edge = new THREE.Vector3()
+      const addTriangle = (a: number, b: number, c: number) => {
+        aPoint.fromArray(verts, a * 3); bPoint.fromArray(verts, b * 3); cPoint.fromArray(verts, c * 3)
+        normal.subVectors(bPoint, aPoint).cross(edge.subVectors(cPoint, aPoint)).normalize()
+        // A coarse net must never connect an overpass to the lower road with an
+        // invisible ramp. Real steep terrain already has its own visible collider.
+        if (Math.abs(normal.y) < 0.9) return
+        if (Math.max(aPoint.y, bPoint.y, cPoint.y) - Math.min(aPoint.y, bPoint.y, cPoint.y) > 0.3) {
+          for (const [u, v] of [[aPoint, bPoint], [bPoint, cPoint], [cPoint, aPoint]]) {
+            const x = (u.x + v.x) / 2, y = (u.y + v.y) / 2, z = (u.z + v.z) / 2
+            let crossesRoad = false
+            physics.world.intersectionsWithRay(new R.Ray({ x, y: y + 0.04, z }, { x: 0, y: -1, z: 0 }), 8, true, hit => {
+              if (physics.getMeta(hit.collider.handle)?.surface === 'asphalt' && hit.timeOfImpact > 0.09) crossesRoad = true
+              return !crossesRoad
+            }, undefined, rayGroups)
+            if (crossesRoad) return
+          }
+        }
+        index.push(a, b, c)
+      }
       for (let r = 0; r < rowCount; r++) {
         const a = r * cols, b = ((r + 1) % rows) * cols
         for (let j = 0; j < cols - 1; j++) {
-          index[k++] = a + j; index[k++] = b + j; index[k++] = a + j + 1
-          index[k++] = a + j + 1; index[k++] = b + j; index[k++] = b + j + 1
+          addTriangle(a + j, b + j, a + j + 1)
+          addTriangle(a + j + 1, b + j, b + j + 1)
         }
       }
       const holeGeo = new THREE.BufferGeometry()
       holeGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3))
-      holeGeo.setIndex(new THREE.BufferAttribute(index, 1))
+      holeGeo.setIndex(index)
       addTrimeshCollider(physics, holeGeo, 'grass')
       holeGeo.dispose()
       if (holes) console.info(`[Track] hole net bridged ${holes} of ${rows * cols} cells with no ground under them`)
@@ -1034,20 +1116,39 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
     }
   }
 
-  // Jump ramps.
+  // Smooth, spline-following crests. A tilted box left a 31 cm vertical
+  // entrance: low formula noses struck it like an invisible wall. Both ends
+  // now meet the asphalt with zero slope, and the mesh is the collider.
   for (const j of jumps) {
-    const s = spline.atT(j.at)
-    const rampLen = 10
-    const rampH = 0.9
-    const g = new THREE.BoxGeometry(halfWidth * 1.2, rampH, rampLen)
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x444951, roughness: 0.7 }))
-    const yaw = Math.atan2(s.tangent.x, s.tangent.z)
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.atan2(rampH, rampLen)))
-    m.position.copy(s.position).addScaledVector(s.up, rampH * 0.35)
-    m.quaternion.copy(q)
-    root.add(m)
-    disposables.push(g, m.material as THREE.Material)
-    physics.addStaticBox({ x: halfWidth * 0.6, y: rampH / 2, z: rampLen / 2 }, { x: m.position.x, y: m.position.y, z: m.position.z }, { x: q.x, y: q.y, z: q.z, w: q.w }, { surface: 'asphalt' }, 0.9)
+    const centre = spline.atT(j.at).distance
+    const length = 40, height = 0.35, segments = 80
+    const positions: number[] = [], uvs: number[] = [], indices: number[] = []
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      const sample = spline.atDistance(centre + (t - 0.5) * length)
+      const lift = height * Math.sin(Math.PI * t) ** 2 + 0.005
+      for (const side of [-1, 1]) {
+        const point = sample.position.clone().addScaledVector(sample.right, side * (halfWidth - 0.15)).addScaledVector(sample.up, lift)
+        positions.push(point.x, point.y, point.z)
+        uvs.push((side + 1) / 2, t * 4)
+      }
+      if (i > 0) {
+        const n = (i - 1) * 2
+        indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3)
+      }
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+    geometry.setIndex(indices)
+    geometry.computeVertexNormals()
+    const material = new THREE.MeshStandardMaterial({ color: 0x444951, roughness: 0.85 })
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.name = 'road-crest'
+    mesh.receiveShadow = true
+    root.add(mesh)
+    disposables.push(geometry, material)
+    addTrimeshCollider(physics, geometry, 'asphalt')
   }
 
   // Start / finish gantry (circuit models carry their own start lights and line).
@@ -1085,7 +1186,8 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
   // ---------------------------------------------------------------------------
   const spawnPose = (distance: number, lateral = 0): GridSlot => {
     const s = spline.atDistance(distance)
-    const position = s.position.clone().addScaledVector(s.right, lateral)
+    const margin = Math.max(0, halfWidthAt(spline.nearestIndex(s.position)) - 1.5)
+    const position = s.position.clone().addScaledVector(s.right, clamp(lateral, -margin, margin))
     position.y += 0.9
     // Matrix4.lookAt(eye, target, up) builds a frame whose +Z axis points from target to eye,
     // so aiming at -tangent makes the car's +Z (forward) point along the track direction.
@@ -1143,7 +1245,6 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
 
   log.info(`Built ${def.name} in ${(performance.now() - t0).toFixed(0)}ms — ${spline.length.toFixed(0)} m, ${checkpoints.length} checkpoints`)
 
-  const releaseBodies = physics.endScope()
   return {
     def,
     spline,
@@ -1186,7 +1287,6 @@ export async function buildTrack(def: TrackDefinition, physics: PhysicsWorld, te
       hazards.dispose()
       props.dispose()
       billboards?.dispose()
-      releaseBodies()
       for (const d of disposables) d.dispose()
       root.clear()
     },

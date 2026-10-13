@@ -1679,3 +1679,34 @@ input[type='text']:focus {
   background: rgba(0, 229, 255, 0.7);
   color: #041018;
 }
+
+/* Full circuit names and badges remain separate at every card width. */
+.circuit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.circuit-card .card__title {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.circuit-card .card__badge {
+  position: static;
+  align-self: flex-start;
+  margin-top: auto;
+}
+.race-session select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: #141b26;
+}
+@media (max-height: 800px) {
+  .menu__logo { font-size: 60px; }
+  .menu__nav .btn--menu { padding-top: 10px; padding-bottom: 10px; }
+  .menu__nav { gap: 3px; }
+}

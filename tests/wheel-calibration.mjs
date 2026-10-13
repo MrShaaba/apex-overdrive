@@ -1,94 +1,134 @@
-// Fake-gamepad calibration test: installs a synthetic G29 (and optionally a pad) via
-// navigator.getGamepads, opens Options → Controls, runs the calibration flow by driving the
-// fake axes/buttons, saves, then starts a race and checks the inverted pedal axis drives the car.
-// Run: `npm run dev` then `node tests/wheel-calibration.mjs` (APEX_URL / CHROME env overrides).
+// Two identical G29-class wheels with integrated pedals: UI calibration, saved instance
+// profiles, reload, split input, paddles/cameras/pause and disconnect/reconnect routing.
+import assert from 'node:assert/strict'
 import puppeteer from 'puppeteer-core'
 import fs from 'node:fs'
 fs.mkdirSync('tests/shots', { recursive: true })
 const SERVER = process.env.APEX_URL ?? 'http://localhost:5173/'
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const width = 1280, height = 720
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--ignore-gpu-blocklist', `--window-size=${width},${height}`] })
-const page = await browser.newPage(); await page.setViewport({ width, height, deviceScaleFactor: 1 })
-page.on('console', (m) => { const t = m.text(); if (/\[Input\]|error/i.test(t)) console.log('  >', t) })
-await page.evaluateOnNewDocument(() => {
-  // Two fake devices: a G29 wheel (pedals resting at +1, pressed to -1; wheel on axis 0)
-  // and an Xbox pad. window.__pads lets the test poke values.
-  const mk = (index, id, nAxes, nButtons) => ({ index, id, connected: true, mapping: index === 1 ? 'standard' : '', timestamp: 0, axes: new Array(nAxes).fill(0), buttons: Array.from({ length: nButtons }, () => ({ pressed: false, touched: false, value: 0 })) })
-  const wheel = mk(0, 'Logitech G29 Driving Force Racing Wheel (Vendor: 046d Product: c24f)', 4, 25)
-  wheel.axes[2] = 1; wheel.axes[3] = 1 // pedals at rest
-  const pad = mk(1, 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', 4, 17)
-  window.__pads = { wheel, pad, list: [wheel, pad] }
-  navigator.getGamepads = () => window.__pads.list.slice()
-})
-await page.goto(SERVER, { waitUntil: 'domcontentloaded' })
-await page.waitForFunction(() => window.__apex && window.__apex.mode === 'showcase', { timeout: 60000 })
-const click = async (re) => page.evaluate((src) => { const re = new RegExp(src, 'i'); const b = [...document.querySelectorAll('button')].find((x) => re.test(x.innerText) && !x.disabled); if (!b) return false; b.click(); return true }, re.source)
-const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-const setAxis = (dev, i, v) => page.evaluate((d, i, v) => { window.__pads[d].axes[i] = v }, dev, i, v)
-const press = async (dev, i, on) => page.evaluate((d, i, on) => { const b = window.__pads[d].buttons[i]; b.pressed = on; b.value = on ? 1 : 0 }, dev, i, on)
-const tap = async (dev, i) => { await press(dev, i, true); await wait(80); await press(dev, i, false); await wait(80) }
-
-// Options → Controls
-if (!(await click(/^options/))) { await click(/options/) }
-await wait(800)
-await click(/^controls$/) ; await wait(800)
-const rows = await page.$$eval('[data-testid=device-row]', (els) => els.map((e) => e.innerText.replace(/\n/g, ' | ')))
-console.log('device rows:', rows)
-if (rows.length !== 2) { console.log('FAIL expected 2 device rows'); await browser.close(); process.exit(1) }
-await page.evaluate(() => { const p = document.querySelector('.device-row'); p && p.scrollIntoView({ block: 'center' }) })
-await page.screenshot({ path: 'tests/shots/wheel-panel.png' })
-
-// Calibrate the wheel (first row's Calibrate button)
-await page.evaluate(() => { const b = [...document.querySelectorAll('[data-testid=device-row]')[0].querySelectorAll('button')].find((x) => /calibrate/i.test(x.innerText)); b.click() })
-await wait(400)
-const prompt = async () => page.$eval('.calib__prompt', (e) => e.innerText)
-console.log('step1:', await prompt())
-await setAxis('wheel', 0, -0.98); await wait(150); await setAxis('wheel', 0, 0.97); await wait(150); await setAxis('wheel', 0, 0.0); await wait(150)
-await page.screenshot({ path: 'tests/shots/wheel-calib-steer.png' })
-await click(/^next$/); await wait(300); console.log('step2:', await prompt())
-await setAxis('wheel', 2, -1); await wait(150); await setAxis('wheel', 2, 1); await wait(150)
-await click(/^next$/); await wait(300); console.log('step3:', await prompt())
-await setAxis('wheel', 3, -0.9); await wait(150); await setAxis('wheel', 3, 1); await wait(150)
-await page.screenshot({ path: 'tests/shots/wheel-calib-brake.png' })
-await click(/^next$/); await wait(300); console.log('step4:', await prompt())
-await tap('wheel', 4); await wait(200); console.log('step5:', await prompt())
-await tap('wheel', 5); await wait(200); console.log('step6:', await prompt())
-await tap('wheel', 3); await wait(200); console.log('step7:', await prompt())
-await tap('wheel', 9); await wait(300); console.log('step8:', await prompt())
-await page.screenshot({ path: 'tests/shots/wheel-calib-done.png' })
-await click(/^save$/); await wait(500)
-const saved = await page.evaluate(() => JSON.stringify(window.__apex.settings.controls.devices))
-console.log('saved:', saved)
-const prof = JSON.parse(saved)['Logitech G29 Driving Force Racing Wheel (Vendor: 046d Product: c24f)']
-const ok1 = prof && prof.calibrated && prof.steer.axis === 0 && prof.throttle.axis === 2 && prof.throttle.min === 1 && prof.throttle.max === -1 && prof.brake.axis === 3 && prof.buttons.gearUp === 4 && prof.buttons.gearDown === 5 && prof.buttons.camera === 3 && prof.buttons.pause === 9
-console.log(ok1 ? 'PASS profile saved as expected' : 'FAIL profile mismatch')
-// Assign pad to P2 via the row buttons
-await page.evaluate(() => { const b = [...document.querySelectorAll('[data-testid=device-row]')[1].querySelectorAll('button')].find((x) => /^P2$/.test(x.innerText)); b.click() })
-await wait(600)
-const players = await page.evaluate(() => JSON.stringify(window.__apex.settings.controls.players))
-console.log('players:', players)
-await page.screenshot({ path: 'tests/shots/wheel-panel-assigned.png' })
-
-// Race: press the wheel's throttle and check the car accelerates; pad steer feeds player 2.
-await page.evaluate(() => window.__apex.startRace({ mode: 'quick', trackId: 'lakeside', carId: 'w13', laps: 1, aiCount: 0, aiMix: 'class', difficulty: 'rookie', weather: 'clear', hour: 12, dynamicWeather: false, timeRate: 0, ghost: false, seed: 1 }))
-await page.waitForFunction(() => window.__apex.race && window.__apex.race.phase === 'racing', { timeout: 60000 })
-await setAxis('wheel', 2, -1) // throttle floored, wheel straight
-await wait(3000)
-const speed = await page.evaluate(() => window.__apex.player.controller.telemetry.speedKmh)
-console.log('speed after 3 s full throttle (wheel): km/h', speed.toFixed(1))
-await setAxis('wheel', 0, 0.5)
-await setAxis('pad', 0, -0.8)
-await wait(400)
-const st = await page.evaluate(() => { const i = window.__apex.input; return { p1: { ...i.getState(0) }, p2: { ...i.getState(1) } } })
-console.log('p1 state:', JSON.stringify(st.p1), '\np2 state:', JSON.stringify(st.p2))
-const ok2 = st.p1.throttle > 0.95 && st.p1.steer > 0.4 && st.p2.steer < -0.6 && speed > 30
-await page.screenshot({ path: 'tests/shots/wheel-race.png' })
-await setAxis('wheel', 0, 0)
-console.log(ok2 ? 'PASS race input' : 'FAIL race input')
-// Edge action: wheel pause button 9 → pause
-await tap('wheel', 9); await wait(300)
-const paused = await page.evaluate(() => !!document.querySelector('.pause__title'))
-console.log('paused after wheel pause button:', paused, paused ? 'PASS' : 'FAIL')
-await browser.close()
-process.exit(ok1 && ok2 && paused ? 0 : 1)
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--ignore-gpu-blocklist', '--window-size=1280,720'] })
+try {
+  const page = await browser.newPage()
+  await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 })
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await page.evaluateOnNewDocument(() => {
+    const id = 'Logitech G29 Driving Force Racing Wheel (Vendor: 046d Product: c24f)'
+    const mk = (index) => ({ index, id, connected: true, mapping: '', timestamp: 0, axes: [0, 0, 1, 1], buttons: Array.from({ length: 25 }, () => ({ pressed: false, touched: false, value: 0 })) })
+    const wheel = mk(0), second = mk(1)
+    window.__pads = { wheel, second, list: [wheel, second] }
+    navigator.getGamepads = () => window.__pads.list.slice()
+  })
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const boot = () => page.waitForFunction(() => window.__apex?.mode === 'showcase', { timeout: 60000 })
+  const click = async (pattern) => {
+    const found = await page.evaluate((source) => {
+      const re = new RegExp(source, 'i')
+      const button = [...document.querySelectorAll('button')].find((b) => re.test(b.innerText) && !b.disabled)
+      button?.click(); return !!button
+    }, pattern.source)
+    assert.ok(found, `Button ${pattern} exists and is enabled`)
+  }
+  const axis = (dev, index, value) => page.evaluate((dev, index, value) => { window.__pads[dev].axes[index] = value }, dev, index, value)
+  const press = (dev, index, on) => page.evaluate((dev, index, on) => { const button = window.__pads[dev].buttons[index]; button.pressed = on; button.value = on ? 1 : 0 }, dev, index, on)
+  const tap = async (dev, index) => { await press(dev, index, true); await wait(120); await press(dev, index, false); await wait(120) }
+  const openControls = async () => { await click(/options/); await wait(500); await click(/^controls$/); await wait(500) }
+  await page.goto(SERVER, { waitUntil: 'domcontentloaded' }); await boot(); await openControls()
+  assert.equal(await page.$$eval('[data-testid=device-row]', (rows) => rows.length), 2)
+  await page.evaluate(() => document.querySelector('.controller-device').scrollIntoView({ block: 'center' }))
+  await page.screenshot({ path: 'tests/shots/wheel-panel.png' })
+  async function calibrate(dev, row, center, buttons) {
+    await page.evaluate((row) => {
+      const button = [...document.querySelectorAll('[data-testid=device-row]')[row].querySelectorAll('button')].find((b) => /calibrate/i.test(b.innerText)); button.click()
+    }, row)
+    await wait(250)
+    await axis(dev, 0, -0.98); await wait(180); await axis(dev, 0, 0.97); await wait(180); await axis(dev, 0, center); await wait(180)
+    await click(/^next$/); await wait(150)
+    await axis(dev, 2, -1); await wait(180); await axis(dev, 2, 1); await wait(180)
+    await click(/^next$/); await wait(150)
+    await axis(dev, 3, -0.9); await wait(180); await axis(dev, 3, 1); await wait(180)
+    await click(/^next$/); await wait(150)
+    for (const button of buttons) await tap(dev, button)
+    await page.waitForFunction(() => document.querySelector('.calib__prompt')?.textContent?.startsWith('Review'), { timeout: 10000 })
+    await page.screenshot({ path: `tests/shots/wheel-calib-${dev}.png` })
+    await click(/^save$/); await wait(400)
+  }
+  await calibrate('wheel', 0, 0, [4, 5, 3, 9])
+  await calibrate('second', 1, 0.04, [6, 7, 12, 13])
+  for (const row of [0, 1]) {
+    await page.evaluate((row) => {
+      const button = [...document.querySelectorAll('[data-testid=device-row]')[row].querySelectorAll('button')].find((b) => b.innerText === `P${row + 1}`); button.click()
+    }, row)
+    await wait(300)
+  }
+  const profiles = await page.evaluate(() => {
+    const controls = window.__apex.settings.controls
+    return { players: controls.players, devices: controls.devices, pedals: controls.pedals }
+  })
+  assert.notEqual(profiles.players[0], profiles.players[1])
+  const first = profiles.devices[profiles.players[0]], second = profiles.devices[profiles.players[1]]
+  assert.ok(first.calibrated && second.calibrated)
+  assert.equal(first.steer.center, 0); assert.equal(second.steer.center, 0.04)
+  assert.equal(first.throttle.axis, 2); assert.equal(first.throttle.min, 1); assert.equal(first.throttle.max, -1)
+  assert.equal(first.buttons.gearUp, 4); assert.equal(second.buttons.gearUp, 6)
+  assert.deepEqual(profiles.pedals, [null, null])
+  console.log('PASS two identical wheels have independent calibrated profiles and explicit player assignments')
+  await page.evaluate(() => {
+    const details = document.querySelector('.controller-device details'); details.open = true; details.scrollIntoView({ block: 'start' })
+  })
+  await axis('wheel', 0, 0.5); await axis('wheel', 2, -1); await wait(400)
+  const live = await page.evaluate(() => [...document.querySelector('.controller-device').querySelectorAll('meter')].map((m) => m.value))
+  assert.ok(live[0] > 0.4 && live[1] === 1 && live[2] === 0, `live steering/throttle/brake ${live}`)
+  await page.screenshot({ path: 'tests/shots/wheel-tuning.png' })
+  await axis('wheel', 0, 0); await axis('wheel', 2, 1)
+  await page.reload({ waitUntil: 'domcontentloaded' }); await boot()
+  const persisted = await page.evaluate(() => window.__apex.settings.controls)
+  assert.deepEqual(persisted.players, profiles.players)
+  assert.deepEqual(persisted.devices, profiles.devices)
+  console.log('PASS independent wheel calibration and assignments survive page reload')
+  await axis('second', 0, 0.04)
+  await page.evaluate(() => {
+    const engine = window.__apex
+    engine.applySettings({ ...engine.settings, controls: { ...engine.settings.controls, transmission: 'manual' } })
+    return engine.startRace({ mode: 'quick', trackId: 'lakeside-circuit', carId: 'mercedes-w13', carId2: 'mercedes-w13', players: 2, splitLayout: 'side', laps: 1, aiCount: 0, aiMix: 'class', difficulty: 'rookie', weather: 'clear', hour: 12, dynamicWeather: false, timeRate: 0, ghost: false, seed: 1 })
+  })
+  await page.waitForFunction(() => window.__apex.race?.phase === 'racing', { timeout: 60000 })
+  await axis('wheel', 2, -1); await axis('second', 2, 0.2); await wait(3000)
+  const drive = await page.evaluate(() => {
+    const a = window.__apex
+    return { p1: { ...a.input.getState(0) }, p2: { ...a.input.getState(1) }, speed1: a.player.controller.telemetry.speedKmh, speed2: a.player2.controller.telemetry.speedKmh, cars: [a.player.spec.id, a.player2.spec.id] }
+  })
+  assert.equal(drive.p1.throttle, 1); assert.ok(drive.p2.throttle > 0.35 && drive.p2.throttle < 0.45)
+  assert.ok(drive.p1.directSteering && drive.p2.directSteering)
+  assert.ok(drive.speed1 > 25 && drive.speed2 > 5, JSON.stringify(drive))
+  assert.deepEqual(drive.cars, ['mercedes-w13', 'mercedes-w13'])
+  console.log(`PASS identical integrated wheel+pedal devices independently drive both split cars (${drive.speed1.toFixed(1)} / ${drive.speed2.toFixed(1)} km/h)`)
+  await axis('wheel', 0, 0.5); await axis('second', 0, -0.6); await wait(150)
+  const steer = await page.evaluate(() => [window.__apex.input.getState(0).steer, window.__apex.input.getState(1).steer])
+  assert.ok(steer[0] > 0.4 && steer[1] < -0.5)
+  await axis('wheel', 0, 0); await axis('second', 0, 0.04)
+  await axis('wheel', 2, 1); await axis('second', 2, 1)
+  const before = await page.evaluate(() => [window.__apex.cameraRig.mode, window.__apex.cameraRig2.mode])
+  await tap('second', 12)
+  const after = await page.evaluate(() => [window.__apex.cameraRig.mode, window.__apex.cameraRig2.mode])
+  assert.equal(after[0], before[0]); assert.notEqual(after[1], before[1])
+  const gears = await page.evaluate(() => [window.__apex.player.controller.telemetry.gear, window.__apex.player2.controller.telemetry.gear])
+  await tap('second', 6); await wait(300)
+  const shifted = await page.evaluate(() => [window.__apex.player.controller.telemetry.gear, window.__apex.player2.controller.telemetry.gear])
+  assert.equal(shifted[0], gears[0]); assert.equal(shifted[1], gears[1] + 1)
+  console.log('PASS independent steering, camera buttons and shift paddles route to the correct car')
+  await page.screenshot({ path: 'tests/shots/dual-wheels-race.png' })
+  await tap('wheel', 9); assert.equal(await page.evaluate(() => window.__apex.paused), true)
+  await tap('wheel', 9); assert.equal(await page.evaluate(() => window.__apex.paused), false)
+  await page.evaluate(() => { window.__pads.list[0] = null }); await wait(250)
+  assert.equal(await page.evaluate(() => window.__apex.paused), true)
+  const remaining = await page.evaluate(() => window.__apex.input.listDevices().map((d) => ({ index: d.index, key: d.key, player: d.player })))
+  assert.deepEqual(remaining, [{ index: 1, key: profiles.players[1], player: 1 }])
+  await page.evaluate(() => { window.__pads.list[0] = window.__pads.wheel }); await wait(250)
+  await tap('second', 13); assert.equal(await page.evaluate(() => window.__apex.paused), false)
+  const restored = await page.evaluate(() => window.__apex.input.listDevices().map((d) => d.player))
+  assert.deepEqual(restored, [0, 1])
+  console.log('PASS both wheel pause controls resume, and unplug/replug of P1 preserves P2 identity')
+  assert.deepEqual(pageErrors, [])
+  console.log('Wheel integration passed with two synthetic identical G29 devices; physical macOS hardware remains unverified.')
+} finally { await browser.close() }

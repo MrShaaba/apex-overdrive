@@ -36,7 +36,7 @@ const setupOk = await page.evaluate(async () => {
   seg.click()
   await new Promise((r) => setTimeout(r, 200))
   const layout = [...document.querySelectorAll('.segmented__opt')].some((x) => /side by side/i.test(x.innerText))
-  const cars = document.querySelectorAll('[data-testid=p2-cars] button').length
+  const cars = document.querySelectorAll('[data-testid=p2-cars] option').length
   return { found: true, layout, cars }
 })
 console.log('race setup:', JSON.stringify(setupOk))
@@ -44,7 +44,7 @@ check(setupOk.found && setupOk.layout && setupOk.cars >= 1, 'Race Setup shows Pl
 await page.screenshot({ path: 'tests/shots/split-setup.png' })
 
 for (const layout of ['stack', 'side']) {
-  await page.evaluate((layout) => window.__apex.startRace({ mode: 'quick', trackId: 'spa', carId: 'w13', carId2: 'mclaren-mcl35m', players: 2, splitLayout: layout, laps: 1, aiCount: 6, aiMix: 'mixed', difficulty: 'rookie', weather: 'clear', hour: 12, dynamicWeather: false, timeRate: 0, ghost: false, seed: 7 }), layout)
+  await page.evaluate((layout) => window.__apex.startRace({ mode: 'quick', trackId: 'spa', carId: 'mercedes-w13', carId2: 'mclaren-mcl35m', players: 2, splitLayout: layout, laps: 1, aiCount: 6, aiMix: 'mixed', difficulty: 'rookie', weather: 'clear', hour: 12, dynamicWeather: false, timeRate: 0, ghost: false, seed: 7 }), layout)
   await page.waitForFunction(() => window.__apex.race && window.__apex.race.phase === 'racing', { timeout: 90000 })
   const info = await page.evaluate(() => { const a = window.__apex; return { p1: a.player.spec.id, p2: a.player2 && a.player2.spec.id, cars: a.vehicles.length, split: a.split, huds: document.querySelectorAll('.hud').length, tags: [...document.querySelectorAll('.split__tag')].map((e) => e.innerText), racePlayer: a.race.player && a.race.player.vehicleId, p1id: a.player.id } })
   console.log(layout, JSON.stringify(info))

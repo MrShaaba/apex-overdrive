@@ -19,7 +19,7 @@
 
 import * as THREE from 'three'
 import type RAPIER from '@dimforge/rapier3d-compat'
-import { PhysicsWorld } from './PhysicsWorld'
+import type { PhysicsWorld } from './PhysicsWorld'
 import { frictionEllipse, tireCurve } from './TireModel'
 import { CollisionGroup, effectiveGrip, makeGroups, SURFACES, type SurfaceType, type WeatherGripState } from './Surfaces'
 import { cosmeticModifiers, type CosmeticPhysicsModifiers, type VehicleCustomization, type VehicleSpec } from '../vehicles/VehicleSpec'
@@ -27,6 +27,8 @@ import { clamp, clamp01, damp, degToRad, sign } from '../core/MathUtils'
 
 export interface VehicleInput {
   steer: number
+  /** Calibrated wheel: linear steering rack, without gamepad speed assistance. */
+  directSteering?: boolean
   throttle: number
   brake: number
   handbrake: boolean
@@ -104,7 +106,7 @@ export interface VehicleTelemetry {
 
 const RHO_AIR = 1.225
 const WHEEL_INERTIA = 1.6
-const FILTER_GROUPS = makeGroups(CollisionGroup.VEHICLE, CollisionGroup.GROUND | CollisionGroup.PROP | CollisionGroup.HAZARD)
+const FILTER_GROUPS = makeGroups(CollisionGroup.VEHICLE, CollisionGroup.GROUND)
 
 /**
  * Steering lock available at a given speed (radians). Lock is limited so a full
@@ -394,10 +396,16 @@ export class VehicleController {
     for (const w of this.wheels) {
       w.angularVelocity = keepSpeed / w.radius
       w.compression = w.prevCompression = 0
+      w.contact = false
+      w.load = w.suspensionForce = 0
       w.locked = w.spinning = false
     }
     this.gear = 1
     this.shiftTimer = 0
+    this.reverseDwell = 0
+    this.airborneTime = 0
+    this.lastSteerAngle = 0
+    this.prevVelocity.copy(fwd)
     this.upsideDownTime = 0
     this.beachedTime = 0
     this.needsRespawn = false
@@ -420,7 +428,7 @@ export class VehicleController {
       this.gear--
       this.shiftTimer = this.spec.gearbox.shiftTime
       this.onGearChange?.(this.gear, false)
-    } else if (this.gear === 1 && this.telemetry.speed < 2) {
+    } else if (this.gear === 1 && Math.abs(this.telemetry.speed) < 2) {
       this.gear = -1
       this.onGearChange?.(this.gear, false)
     }
@@ -493,7 +501,7 @@ export class VehicleController {
 
     // --- Steering -----------------------------------------------------------
     const driftAngle = speed > 4 ? Math.atan2(_linvel.dot(_right), Math.max(0.5, Math.abs(forwardSpeed))) : 0
-    const maxSteer = steeringLimit(spec, forwardSpeed, driftAngle)
+    const maxSteer = input.directSteering ? degToRad(spec.steering.maxAngle) : steeringLimit(spec, forwardSpeed, driftAngle)
     let steerTarget = input.steer * maxSteer + this.steerDamageOffset * maxSteer
 
     // Electronic stability control: countersteer when the car yaws past the driver's intent.
@@ -503,7 +511,7 @@ export class VehicleController {
       escThrottleCut = clamp(1 - (Math.abs(driftAngle) - 0.15) * 2, 0.35, 1)
     }
     const steerRate = spec.steering.responseRate * (1 - this.damage * 0.3)
-    const steerAngle = damp(this.lastSteerAngle, steerTarget, steerRate, dt)
+    const steerAngle = input.directSteering ? steerTarget : damp(this.lastSteerAngle, steerTarget, steerRate, dt)
     this.lastSteerAngle = steerAngle
 
     // --- Gearbox / engine ---------------------------------------------------
@@ -515,7 +523,7 @@ export class VehicleController {
 
     // Reverse handling: holding the brake for a moment at standstill engages reverse;
     // any throttle (or rolling forward) re-engages first gear immediately.
-    if (this.gear === -1) {
+    if (this.gear === -1 && this.assists.autoTransmission) {
       if (throttle > 0.2 || forwardSpeed > 1.5) {
         this.gear = 1
         this.reverseDwell = 0
@@ -659,14 +667,16 @@ export class VehicleController {
       const hit = this.physics.world.castRayAndGetNormal(ray, this.rayLength + 0.02, true, undefined, FILTER_GROUPS, undefined, this.body)
       w.prevCompression = w.compression
       const hadContact = w.contact
-      if (hit && hit.timeOfImpact <= this.rayLength) {
+      // A wall/underside is never a suspension support. Replacing its normal
+      // with chassis-up converted grazing contacts into a launching spring.
+      if (hit && hit.timeOfImpact <= this.rayLength && hit.normal.y > 0.15 &&
+        hit.normal.x * _up.x + hit.normal.y * _up.y + hit.normal.z * _up.z > 0.25) {
         w.contact = true
         wheelsOnGround++
         const toi = hit.timeOfImpact
         w.compression = this.rayLength - toi
         w.contactPoint.copy(origin).addScaledVector(rayDir, toi)
         w.contactNormal.set(hit.normal.x, hit.normal.y, hit.normal.z)
-        if (w.contactNormal.dot(_up) < 0.25) w.contactNormal.copy(_up)
         w.hubWorld.copy(origin).addScaledVector(rayDir, toi - w.radius)
         const meta = this.physics.getMeta(hit.collider.handle)
         w.surface = meta?.surface ?? 'asphalt'

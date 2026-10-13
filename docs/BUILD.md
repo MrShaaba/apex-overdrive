@@ -1,34 +1,47 @@
-# Build workflow
+# Build and verification
 
-```bash
-npm run build      # tsc -b (type check) + vite build → dist/
-npm run preview    # local static server for dist/
-```
+Use Node 22.12 or newer and a local Chrome/Chromium installation.
 
-`vite.config.ts`:
-* `base: './'` — relocatable build; deploy `dist/` to any static host (GitHub Pages,
-  Netlify, Vercel, S3/CloudFront, nginx). No server code is required.
-* Manual chunks separate `three`, `@dimforge/rapier3d-compat` and `react` from game code
-  so the React shell + loading screen paint while the heavy chunks stream.
-* `target: es2022` — needed for top-level `await` around the Rapier WASM bootstrap.
-
-Typical output (gzip): three ≈ 126 kB, rapier ≈ 760 kB (WASM inlined as base64 by the
-`-compat` package), game + UI ≈ 220 kB, CSS ≈ 5 kB. Total first load ≈ 1.1 MB, cached
-thereafter. To shrink the physics chunk, switch to `@dimforge/rapier3d` (streams a
-separate `.wasm` file) — the `PhysicsWorld` wrapper is the only touch point.
-
-## Hosting checklist
-* Serve over HTTPS (required for gamepad, device orientation and audio autoplay policies).
-* Set `Cache-Control: immutable` on `dist/assets/*` (hashed file names) and a short TTL on
-  `index.html`.
-* Add the MIME type `application/wasm` if you switch to the streaming Rapier build.
-* Optional: `Cross-Origin-Opener-Policy`/`Embedder-Policy` headers are **not** required.
-
-## CI suggestion
-```
+```sh
 npm ci
-npm run lint
-npm run typecheck
-npm run build
+npm run check
 npm run assets:validate
+npm run preview
 ```
+
+`check` runs TypeScript, ESLint, the production build, all regression suites, and
+a smoke test against the compiled production game. Tests start and close their own isolated Vite server and discover Chrome
+on macOS, Linux, and Windows. Set `CHROME` to override the browser executable or
+`APEX_URL` to test an already running server. Run a subset with
+`npm test -- physics-regressions wheel-calibration`.
+
+`dist/` is a static site. No account, application server, or cloud service is
+required. Keep the same URL/port when playing to retain the browser's local save;
+use Options to export a backup before changing origins.
+
+## Loading and caching
+
+The menu loads the React/Three.js shell. Rapier and its WASM payload are dynamically
+imported on the first race. Circuit downloads report their progress; models still
+download as complete GLBs. Leaving a race releases its model, GPU textures, and
+colliders. Car templates stay cached for subsequent races.
+
+Vite separates the physics and renderer into chunks. Exact names and sizes change
+with the build; inspect `npm run build` output rather than relying on old budgets.
+`base: './'` allows hosting under a subdirectory, and `target: es2022` supports the
+physics bootstrap.
+
+## Hosting
+
+Serve `dist/` over HTTPS (localhost also works for development). Cache hashed files
+under `dist/assets/` as immutable, but revalidate `index.html`, unversioned models,
+and the photo manifest when publishing a new version. Cross-origin isolation
+headers are not required.
+
+Family photos are copied into `dist/` by Vite. They remain gitignored in source,
+but publishing this local build would include them. This project has no remote
+and has not been deployed.
+
+For CI, install Chrome/Chromium, then run the commands above through asset
+validation; preview is only for interactive play. See [verification](VERIFICATION.md)
+for the tested scope and [controllers](CONTROLLERS.md) before buying hardware.

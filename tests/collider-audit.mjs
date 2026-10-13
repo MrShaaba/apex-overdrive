@@ -2,24 +2,21 @@
 /**
  * Collider audit: on every circuit, samples the drivable band (every 2 m along the
  * lap, every 2 m across between the kerbs) with a box 5 cm to 1.45 m above the road
- * and fails if any non-ground collider intersects it — a prop, a wall, a hazard body
- * or an unregistered shape sitting on the racing surface would flip a car. Ground
+ * and fails if an invisible non-ground collider intersects it. Visible walls and
+ * deliberate hazards are reported separately. Ground
  * colliders (road, kerb, run-off, the nets) are allowed; those whose top sits more
  * than 25 cm above the road at the same spot are reported as steps.
  *
- * Needs the dev server (APEX_URL, default http://localhost:5173) and system Chrome.
- *   npm test                   all circuits
- *   npm test -- spa sepang     just those
+ * The test runner starts the server and discovers Chrome automatically:
+ *   npm test -- collider-audit
+ * For individual circuits against a running server:
+ *   APEX_URL=http://127.0.0.1:5173 node tests/collider-audit.mjs spa sepang
  */
-import fs from 'node:fs'
 import puppeteer from 'puppeteer-core'
 
 const SERVER = process.env.APEX_URL ?? 'http://localhost:5173/'
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const catalog = fs.readFileSync(new URL('../src/game/tracks/TrackCatalog.ts', import.meta.url), 'utf8')
-const allTracks = [...catalog.matchAll(/^    id: '([a-z0-9-]+)',$/gm)].map((m) => m[1])
 const wanted = process.argv.slice(2).filter((a) => !a.startsWith('-'))
-const tracks = wanted.length ? wanted : allTracks
 
 try { await fetch(SERVER) } catch { console.error(`no dev server at ${SERVER} — run \`npm run dev\` first (or set APEX_URL)`); process.exit(2) }
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--ignore-gpu-blocklist', '--window-size=960,540'] })
@@ -28,6 +25,7 @@ await page.setViewport({ width: 960, height: 540 })
 page.on('pageerror', (e) => console.error('page error:', e.message))
 await page.goto(SERVER, { waitUntil: 'domcontentloaded' })
 await page.waitForFunction(() => window.__apex && window.__apex.mode === 'showcase', { timeout: 60000 })
+const tracks = wanted.length ? wanted : await page.evaluate(async () => (await import('/src/game/tracks/TrackCatalog.ts')).TRACK_CATALOG.map(t => t.id))
 
 let failures = 0
 for (const trackId of tracks) {

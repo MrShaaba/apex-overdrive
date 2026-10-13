@@ -5,7 +5,8 @@ import { useProfile, useIsTouch } from '../hooks'
 import { rankTitle, xpForLevel } from '../../game/gameplay/Progression'
 import { formatCredits } from '../../game/core/MathUtils'
 import { currentChallenges, challengeProgress, syncChallengePeriod } from '../../game/gameplay/Challenges'
-import { getVehicleSpec } from '../../game/vehicles/VehicleCatalog'
+import { getVehicleSpec, VEHICLE_CATALOG } from '../../game/vehicles/VehicleCatalog'
+import { TRACK_CATALOG } from '../../game/tracks/TrackCatalog'
 import { Engine } from '../../game/core/Engine'
 
 export function MainMenu() {
@@ -30,7 +31,7 @@ export function MainMenu() {
     { label: 'Rankings', icon: '📊', sub: 'Leaderboards', go: () => navigate('rankings') },
     { label: 'Gallery', icon: '📸', sub: `${profile.photos.length} photos`, go: () => navigate('gallery') },
     { label: 'Driver', icon: '👤', sub: 'Stats & awards', go: () => navigate('stats') },
-    { label: 'Online', icon: '🌐', sub: 'Coming soon', go: () => navigate('multiplayer') },
+    { label: 'Local racing', icon: '🎮', sub: 'Two players & ghosts', go: () => navigate('multiplayer') },
     { label: 'Options', icon: '⚙️', sub: '', go: () => navigate('options') },
   ]
 
@@ -42,7 +43,7 @@ export function MainMenu() {
           <br />
           <em>Overdrive</em>
         </h1>
-        <div className="menu__tag">Nine cars · Nine circuits · One league</div>
+        <div className="menu__tag">{VEHICLE_CATALOG.length} cars · {TRACK_CATALOG.length} layouts · Your home grid</div>
       </div>
       <nav className="menu__nav">
         {items.map((it, i) => (
@@ -111,7 +112,7 @@ export function MainMenu() {
         )}
         {!audioUnlocked && <span style={{ color: 'var(--cyan)' }}>🔈 Click or tap to enable audio</span>}
         <span className="spacer" />
-        <span>v1.0 · drag to rotate the car</span>
+        <span>v2.0 · drag to rotate the car</span>
       </div>
     </div>
   )

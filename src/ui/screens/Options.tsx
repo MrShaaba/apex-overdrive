@@ -125,7 +125,6 @@ export function OptionsScreen() {
                 </Field>
                 <Toggle value={c.vibration} onChange={(v) => update((s) => (s.controls.vibration = v))} label="Vibration on impact (mobile)" />
               </Panel>
-              <DevicePanel settings={settings} update={update} />
               <Panel title="Assists & units">
                 <Field label="Transmission">
                   <Segmented<TransmissionMode> value={c.transmission} options={[{ value: 'auto', label: 'Automatic' }, { value: 'manual', label: 'Manual (Q/E)' }]} onChange={(v) => update((s) => (s.controls.transmission = v))} />
@@ -144,6 +143,7 @@ export function OptionsScreen() {
                   <b>Gamepad:</b> left stick steer · RT throttle · LT brake · B handbrake · push stick up for ERS boost · Y camera · bumpers shift · Start pause.
                 </div>
               </Panel>
+              <DevicePanel settings={settings} update={update} />
             </>
           )}
           {tab === 'gameplay' && (

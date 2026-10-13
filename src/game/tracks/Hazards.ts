@@ -247,19 +247,35 @@ export class HazardSystem {
       case 'fountain': {
         const isIce = feature.kind === 'ice'
         const span = feature.span ?? 40
-        // A surface-only patch: a sensor whose top sits 5 mm above the road so the wheel rays
-        // read ice/water first, but nothing to push a chassis — the old 4 cm cuboid was a kerb.
-        const body = physics.createBody(R.RigidBodyDesc.fixed().setTranslation(s.position.x, s.position.y - 0.015, s.position.z).setRotation({ x: alongRight.x, y: alongRight.y, z: alongRight.z, w: alongRight.w }))
-        const col = physics.world.createCollider(R.ColliderDesc.cuboid(halfWidth, 0.02, span / 2).setSensor(true).setCollisionGroups(makeGroups(CollisionGroup.GROUND, CollisionGroup.ALL)).setFriction(0.2), body)
+        // A surface patch follows every road bend and elevation. A horizontal
+        // box over a sloping road was an invisible raised floor to wheel rays,
+        // despite being a sensor that the chassis itself could pass through.
+        const vertices: number[] = [], indices: number[] = []
+        const segments = Math.ceil(span)
+        for (let i = 0; i <= segments; i++) {
+          const sample = spline.atDistance(s.distance + (i / segments - 0.5) * span)
+          for (const sign of [-1, 1]) {
+            const p = sample.position.clone().addScaledVector(sample.right, sign * halfWidth).addScaledVector(sample.up, 0.005)
+            vertices.push(p.x, p.y, p.z)
+          }
+          if (i > 0) {
+            const n = (i - 1) * 2
+            indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3)
+          }
+        }
+        const geometry = new THREE.BufferGeometry()
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+        geometry.setIndex(indices)
+        geometry.computeVertexNormals()
+        const body = physics.createBody(R.RigidBodyDesc.fixed())
+        const col = physics.world.createCollider(R.ColliderDesc.trimesh(new Float32Array(vertices), new Uint32Array(indices), R.TriMeshFlags.FIX_INTERNAL_EDGES)
+          .setSensor(true).setCollisionGroups(makeGroups(CollisionGroup.GROUND, CollisionGroup.ALL)), body)
         physics.registerCollider(col, { surface: isIce ? 'ice' : 'water', hazardId: id })
         bodies.push(body)
-        const patch = new THREE.Mesh(
-          new THREE.PlaneGeometry(halfWidth * 2, span),
+        const patch = new THREE.Mesh(geometry,
           new THREE.MeshPhysicalMaterial({ color: isIce ? 0xcfe6ff : 0x6fa8d8, transparent: true, opacity: 0.55, roughness: 0.05, metalness: 0.1, clearcoat: 1, envMapIntensity: 2 }),
         )
-        patch.rotation.x = -Math.PI / 2
-        patch.position.copy(s.position).addScaledVector(s.up, 0.05)
-        patch.rotateZ(-yaw)
+        patch.name = `${feature.kind}-surface`
         patch.receiveShadow = true
         root.add(patch)
         const jets: THREE.Mesh[] = []

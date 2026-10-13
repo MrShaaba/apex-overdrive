@@ -9,7 +9,7 @@ import { Panel, Segmented, Field, Slider, Toggle, Chip } from '../components/Con
 import { useProfile } from '../hooks'
 import { GAME_MODES, defaultRaceConfig, DIFFICULTY_LABEL, type GameModeId, type RaceConfig, type SplitLayout } from '../../game/gameplay/GameModes'
 import { TRACK_CATALOG, WEATHER_LABEL, type WeatherKind } from '../../game/tracks/TrackCatalog'
-import { getVehicleSpec } from '../../game/vehicles/VehicleCatalog'
+import { getVehicleSpec, VEHICLE_CATALOG } from '../../game/vehicles/VehicleCatalog'
 import { Engine } from '../../game/core/Engine'
 import { navigate } from '../../game/state/GameStore'
 import type { DifficultyLevel } from '../../game/core/Settings'
@@ -26,7 +26,7 @@ export function RaceSetupScreen() {
   const [config, setConfig] = useState<RaceConfig>(() => defaultRaceConfig({ carId: profile.selectedCar, difficulty: profile.settings.gameplay.difficulty, trackId: profile.unlockedTracks[0] ?? 'island-causeway' }))
   const mode = GAME_MODES[config.mode]
   const track = useMemo(() => TRACK_CATALOG.find((t) => t.id === config.trackId) ?? TRACK_CATALOG[0], [config.trackId])
-  const car = getVehicleSpec(profile.selectedCar)
+  const car = getVehicleSpec(config.carId)
   const patch = (p: Partial<RaceConfig>) => setConfig((c) => ({ ...c, ...p }))
   const setMode = (m: GameModeId) => {
     const def = GAME_MODES[m]
@@ -39,11 +39,11 @@ export function RaceSetupScreen() {
   const best = leaderboards.playerBest(config.trackId)
   const twoPlayerOk = TWO_PLAYER_MODES.includes(config.mode)
   const twoPlayers = twoPlayerOk && config.players === 2
-  const ownedCars = profile.ownedCars.map(getVehicleSpec)
+  const sessionCars = VEHICLE_CATALOG
   const car2 = getVehicleSpec(config.carId2 ?? profile.ownedCars.find((id) => id !== profile.selectedCar) ?? profile.selectedCar)
   const setPlayers = (players: 1 | 2) => patch({ players, carId2: config.carId2 ?? car2.id, splitLayout: config.splitLayout ?? 'stack' })
   const start = () => {
-    const cfg: RaceConfig = { ...config, carId: profile.selectedCar, players: twoPlayers ? 2 : 1, carId2: twoPlayers ? car2.id : undefined, seed: Math.floor(Math.random() * 1e9), dynamicWeather: config.weather === 'random' || config.dynamicWeather }
+    const cfg: RaceConfig = { ...config, carId: config.carId, players: twoPlayers ? 2 : 1, carId2: twoPlayers ? car2.id : undefined, seed: Math.floor(Math.random() * 1e9), dynamicWeather: config.weather === 'random' || config.dynamicWeather }
     if (cfg.mode === 'championship' || cfg.mode === 'knockout') void Engine.get().startSeries(cfg, cfg.mode)
     else void Engine.get().startRace(cfg)
   }
@@ -81,7 +81,7 @@ export function RaceSetupScreen() {
               const unlocked = profile.unlockedTracks.includes(t.id)
               const incompatible = (mode.pointToPoint && t.closed) || (!mode.pointToPoint && !t.closed && config.mode !== 'freeroam')
               return (
-                <div key={t.id} className={`card ${config.trackId === t.id ? 'card--on' : ''} ${!unlocked || incompatible ? 'card--locked' : ''}`} onClick={() => unlocked && !incompatible && patch({ trackId: t.id, laps: mode.defaultLaps === 'track' ? t.defaultLaps : config.laps })}>
+                <div key={t.id} className={`card circuit-card ${config.trackId === t.id ? 'card--on' : ''} ${!unlocked || incompatible ? 'card--locked' : ''}`} onClick={() => unlocked && !incompatible && patch({ trackId: t.id, laps: mode.defaultLaps === 'track' ? t.defaultLaps : config.laps })}>
                   <div className="card__title">{t.name}</div>
                   <div className="card__sub">
                     {t.location} · {t.lengthKm} km · {'★'.repeat(t.difficulty)}
@@ -98,10 +98,17 @@ export function RaceSetupScreen() {
             {best && <Chip tone="gold">Your best {formatTime(best)}</Chip>}
           </div>
           <p style={{ fontSize: 12, color: 'var(--muted)', margin: '8px 0 0' }}>{track.description}</p>
+          {track.photoBillboards && <p className="hint">Family photos rotate between laps and sessions. Caption strips appear for named photos; UUID exports stay caption-free.</p>}
         </Panel>
       </div>
-      <div className="col" style={{ width: 340, flexShrink: 0 }}>
+      <div className="col scroll race-session" style={{ width: 340, flexShrink: 0 }}>
         <Panel title="Session">
+          <Field label="Player 1 car">
+            <select aria-label="Player 1 car" value={config.carId} onChange={(event) => patch({ carId: event.target.value })}>
+              {sessionCars.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.brand} {vehicle.name}</option>)}
+            </select>
+            <p className="hint">Every car is available for these sessions. Career garage ownership is saved separately.</p>
+          </Field>
           {twoPlayerOk && (
             <Field label="Players">
               <Segmented<1 | 2> value={twoPlayers ? 2 : 1} options={[{ value: 1, label: 'Solo' }, { value: 2, label: 'Two players · split screen' }]} onChange={setPlayers} />
@@ -113,14 +120,12 @@ export function RaceSetupScreen() {
                 <Segmented<SplitLayout> value={config.splitLayout ?? 'stack'} options={[{ value: 'stack', label: 'Top / bottom' }, { value: 'side', label: 'Side by side' }]} onChange={(splitLayout) => patch({ splitLayout })} />
               </Field>
               <Field label="Player 2 car" value={`${car2.brand} ${car2.name}`}>
-                <div className="row" style={{ flexWrap: 'wrap', gap: 6 }} data-testid="p2-cars">
-                  {ownedCars.map((v) => (
-                    <button key={v.id} className={`segmented__opt ${v.id === car2.id ? 'segmented__opt--on' : ''}`} title={`${v.brand} ${v.name}`} onClick={() => patch({ carId2: v.id })}>
-                      {v.name}
-                    </button>
-                  ))}
+                <div data-testid="p2-cars">
+                  <select aria-label="Player 2 car" value={car2.id} onChange={(event) => patch({ carId2: event.target.value })}>
+                    {sessionCars.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.brand} {vehicle.name}</option>)}
+                  </select>
                 </div>
-                <p className="hint" style={{ margin: '6px 0 0' }}>Player 1 drives your garage car ({car.brand} {car.name}). Player 2 uses the second pad, a wheel, or the keyboard — set in Options → Controls.</p>
+                <p className="hint" style={{ margin: '6px 0 0' }}>Player 1 drives the selected car ({car.brand} {car.name}). Player 2 uses the second pad, a wheel, or the keyboard — set in Options → Controls.</p>
               </Field>
             </>
           )}
@@ -132,7 +137,7 @@ export function RaceSetupScreen() {
           {mode.aiMax > 0 && (
             <>
               <Field label="Rivals" value={config.aiCount}>
-                <Slider value={Math.min(config.aiCount, mode.aiMax - (twoPlayers ? 1 : 0))} min={config.mode === 'drift' ? 0 : 1} max={mode.aiMax - (twoPlayers ? 1 : 0)} step={1} onChange={(aiCount) => patch({ aiCount })} />
+                <Slider value={Math.min(config.aiCount, mode.aiMax - (twoPlayers ? 1 : 0))} min={0} max={mode.aiMax - (twoPlayers ? 1 : 0)} step={1} onChange={(aiCount) => patch({ aiCount })} />
               </Field>
               <Field label="Field competency">
                 <Segmented<FieldMix> value={config.aiMix} options={(['mixed', 'rookie', 'amateur', 'pro', 'elite', 'legend'] as FieldMix[]).map((v) => ({ value: v, label: v }))} onChange={(aiMix) => patch({ aiMix })} />

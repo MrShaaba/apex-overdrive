@@ -44,10 +44,12 @@ export interface AudioSettings {
 }
 
 export interface ControlSettings {
-  /** Calibrated gamepad / wheel profiles by device id. */
+  /** Calibrated profiles by device ID + browser index (legacy ID-only keys supported). */
   devices: Record<string, DeviceProfile>
-  /** Device id assigned to player 1 and player 2 (null = first free device). */
+  /** Device instance assigned to player 1 and player 2 (null = first free device). */
   players: [string | null, string | null]
+  /** Optional separate USB pedal device for each player. */
+  pedals: [string | null, string | null]
   steeringSensitivity: number
   steeringDeadzone: number
   touchLayout: TouchLayout
@@ -128,6 +130,7 @@ export function defaultSettings(): Settings {
     controls: {
       devices: {},
       players: [null, null],
+      pedals: [null, null],
       steeringSensitivity: 1,
       steeringDeadzone: 0.08,
       touchLayout: 'buttons',

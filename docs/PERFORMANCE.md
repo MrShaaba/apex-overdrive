@@ -1,5 +1,9 @@
 # Performance & tuning notes
 
+The budgets below are design targets and historical estimates. Current measured
+regression results and their test conditions are recorded in [VERIFICATION.md](VERIFICATION.md).
+They do not establish a frame-rate guarantee for every machine or settings combination.
+
 Target: 60 FPS on a mid-range desktop GPU at 1080p (High preset); playable (30–60 FPS)
 on recent phones (Low/Medium presets).
 

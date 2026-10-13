@@ -21,7 +21,7 @@ import * as THREE from 'three'
 import { steeringLimit, type VehicleController, type VehicleInput } from '../physics/VehicleController'
 import type { RacingLine } from './RacingLine'
 import type { DriverProfile } from './DriverProfiles'
-import { clamp, damp, lerp } from '../core/MathUtils'
+import { clamp, createRng, damp, hashString, lerp } from '../core/MathUtils'
 
 export interface AITrafficEntry {
   id: number
@@ -66,6 +66,7 @@ export class AIDriver {
   private errorTimer = 0
   private errorSteer = 0
   private errorBrakeDelay = 0
+  private errorSteerTime = 0
   private stuckTimer = 0
   private stuckProgress = 0
   private stuckSampleTimer = 0
@@ -74,6 +75,7 @@ export class AIDriver {
   private recoveryTimer = 0
   private recoveryAttempts = 0
   private recoveryStartProgress = 0
+  private reverseElapsed = 0
   private wrongWayTimer = 0
   private boostCooldown = 4
   private rng: () => number
@@ -98,7 +100,7 @@ export class AIDriver {
     startIndex: number,
   ) {
     this.progressIndex = startIndex
-    this.rng = () => Math.random()
+    this.rng = createRng(hashString(profile.id) ^ (startIndex * 7919))
     const s = vehicle.spec
     const mu = (s.tires.gripFront + s.tires.gripRear) / 2
     this.gripFactor = Math.pow(mu, 0.45)
@@ -151,13 +153,14 @@ export class AIDriver {
     const headingToLine = toLineNow.lengthSq() > 1e-3 ? toLineNow.normalize().dot(v.forward) : 1
     if (this.recovery === 'reverse') {
       this.recoveryTimer -= dt
+      this.reverseElapsed += dt
       this.intent = 'recovering'
       input.throttle = 0
-      input.brake = 0.4 // In reverse gear brake acts as reverse throttle.
+      input.brake = 0.7 // Exceed the automatic transmission's reverse-engagement threshold.
       input.steer = this.reverseSteer
       input.handbrake = false
       input.boost = false
-      if (this.recoveryTimer <= 0 || headingToLine > 0.6) {
+      if (this.recoveryTimer <= 0 || (this.reverseElapsed > 1.8 && speed < -1.5 && headingToLine > 0.6)) {
         this.recovery = 'rejoin'
         this.recoveryTimer = 4
       }
@@ -203,7 +206,8 @@ export class AIDriver {
         this.recoveryTimer = 3
       } else {
         this.recovery = 'reverse'
-        this.recoveryTimer = headingToLine > 0.3 ? 0.8 : 1.6
+        this.reverseElapsed = 0
+        this.recoveryTimer = 3.2
         // Reversing with the wheels turned right swings the nose LEFT, so steer away from the
         // side the line is on to bring the nose around toward it.
         const side = toLineNow.x * v.forward.z - toLineNow.z * v.forward.x
@@ -295,15 +299,17 @@ export class AIDriver {
     this.lateralBias = damp(this.lateralBias, this.lateralBiasTarget, 2.2 + aggression, dt)
 
     // --- Mistakes ------------------------------------------------------------------
+    this.errorSteerTime -= dt
+    if (this.errorSteerTime <= 0) this.errorSteer = 0
     this.errorTimer -= dt
-    if (this.errorTimer <= 0) {
+    if (this.errorTimer <= 0 && this.profile.consistency < 1) {
       const period = lerp(4, 40, this.profile.consistency)
       this.errorTimer = period * (0.5 + this.rng())
       const roll = this.rng()
       if (roll < 0.4) this.errorSteer = (this.rng() - 0.5) * (1 - this.profile.consistency) * 0.8
       else if (roll < 0.75) this.errorBrakeDelay = 0.6 + (1 - this.profile.consistency) * 1.2
       else this.errorSteer = 0
-      setTimeout(() => (this.errorSteer = 0), 500 + this.rng() * 600)
+      this.errorSteerTime = 0.5 + this.rng() * 0.6
     }
     if (this.errorBrakeDelay > 0) {
       this.errorBrakeDelay -= dt
@@ -314,7 +320,7 @@ export class AIDriver {
     // Far off the line (after an excursion) aim further ahead so the car rejoins at a
     // shallow angle instead of darting across the road at speed.
     const offLine = Math.abs(this.lateral - (this.line.offsets[this.progressIndex] ?? 0))
-    const lookAhead = 9 + absSpeed * lerp(0.42, 0.3, skill) + Math.min(60, Math.max(0, offLine - 2) * 4)
+    const lookAhead = rejoining ? 4 + absSpeed * 0.3 : 9 + absSpeed * lerp(0.42, 0.3, skill) + Math.min(60, Math.max(0, offLine - 2) * 4)
     const lookIndex = this.progressIndex + Math.round(lookAhead / 2)
     this.line.targetAt(lookIndex, startPhase ? 0 : this.lateralBias, _target)
     _toTarget.copy(_target).sub(pos)
@@ -365,7 +371,7 @@ export class AIDriver {
     targetSpeed = Math.min(targetSpeed, followSpeedCap)
     // Off the racing surface or rejoining after a spin: slow down rather than powering across the run-off.
     if (v.telemetry.onLooseSurface) targetSpeed = Math.min(targetSpeed, 14)
-    if (rejoining) targetSpeed = Math.min(targetSpeed, 11)
+    if (rejoining) targetSpeed = Math.min(targetSpeed, 6)
 
     const err = targetSpeed - absSpeed
     if (err > 0.5) {

@@ -1,25 +1,27 @@
 # Local setup
 
 ## Requirements
-* Node.js 18 or newer (tested on 22), npm 9+.
+* Node.js 22.12 or newer, npm 10+.
 * A browser with WebGL 2 and WebAssembly: Chrome 90+, Edge 90+, Firefox 90+, Safari 16+.
   A discrete or modern integrated GPU is recommended for the High/Ultra presets.
 
 ## Install & run
 ```bash
-npm install
+npm ci
 npm run dev
 ```
-Open http://localhost:5173. Use `npm run dev -- --host` (the default script already passes
-`--host`) to expose the server on your LAN and test on a phone.
+Open http://127.0.0.1:5173. Servers bind to loopback by default. Use
+`npm run dev -- --host 0.0.0.0` to expose the development server on your LAN.
+For normal play, double-click `Start Apex.command`, or build and run `npm start`.
+The production preview uses http://127.0.0.1:4173; keep using that origin for saves.
 
 ## Verify
 ```bash
-npm run typecheck   # strict TypeScript
-npm run lint        # ESLint
-npm run build       # production bundle
-npm run preview     # serve dist/
+npm run check
+npm run preview
 ```
+
+Tests discover Chrome/Chromium on macOS, Linux and Windows. Set `CHROME` to an executable path if necessary. `npm test` starts and closes its own local Vite server; `APEX_URL` is an optional override for an existing server. Run a subset with `npm test -- physics-regressions game-regressions`.
 
 ## Save data
 The profile lives in `localStorage` under `apex-overdrive:profile`. Options → Profile

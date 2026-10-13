@@ -13,7 +13,7 @@ import { bus, type RaceResultSummary } from './EventBus'
 import { Logger } from './Logger'
 import { clamp, clamp01, damp, lerp } from './MathUtils'
 import { resolveQuality, isTouchDevice, type CameraMode, type ResolvedQuality, type Settings } from './Settings'
-import { PhysicsWorld } from '../physics/PhysicsWorld'
+import type { PhysicsWorld } from '../physics/PhysicsWorld'
 import { InputManager } from '../input/InputManager'
 import { TextureFactory } from '../render/TextureFactory'
 import { ParticleSystem, PrecipitationSystem } from '../render/Particles'
@@ -112,6 +112,7 @@ export class Engine {
   racingLine: RacingLine | null = null
   config: RaceConfig | null = null
   series: SeriesState | null = null
+  private seriesDrivers: DriverProfile[] = []
   private replay = new ReplayRecorder(600)
   private ghost: GhostPlayer | null = null
   private ghostVisual: CarVisual | null = null
@@ -163,12 +164,6 @@ export class Engine {
       this.textures.setScale(this.quality.textureScale)
       this.textures.setAnisotropy(Math.min(this.quality.anisotropy, this.renderer.capabilities.getMaxAnisotropy()))
       modelLibrary.init(this.renderer)
-
-      setLoading(0.3, 'Starting physics')
-      this.physics = await PhysicsWorld.create()
-      this.colliderDebug = new ColliderDebug(this.physics, this.scene)
-      this.physics.onContact((e) => this.onContact(e.meta1, e.meta2, e.collider1, e.collider2, e.maxForce))
-
       setLoading(0.5, 'Building environment')
       this.sky = new SkySystem(this.scene, this.renderer, 14, this.quality.envMapSize)
       this.sky.configureShadows(this.quality.shadowMapSize, this.quality.shadowDistance, this.quality.shadowsEnabled)
@@ -209,7 +204,7 @@ export class Engine {
       }
 
       this.input.attachPointer(canvas)
-      this.input.configure({ sensitivity: this.settings.controls.steeringSensitivity, deadzone: this.settings.controls.steeringDeadzone, tilt: this.settings.controls.touchLayout === 'tilt', tiltSensitivity: this.settings.controls.tiltSensitivity, devices: this.settings.controls.devices, players: this.settings.controls.players })
+      this.input.configure({ sensitivity: this.settings.controls.steeringSensitivity, deadzone: this.settings.controls.steeringDeadzone, tilt: this.settings.controls.touchLayout === 'tilt', tiltSensitivity: this.settings.controls.tiltSensitivity, devices: this.settings.controls.devices, players: this.settings.controls.players, pedals: this.settings.controls.pedals })
       this.input.touch.active = isTouchDevice()
       this.qualityManager.enabled = this.settings.graphics.dynamicScaling
       this.qualityManager.setMaxScale(this.quality.resolutionScale)
@@ -251,6 +246,10 @@ export class Engine {
         const s = gameStore.get()
         const who = player === 1 && this.player2 ? 1 : 0
         const car = who ? this.player2 : this.player
+        if (action === 'controllerDisconnected') {
+          if (!this.paused && this.mode === 'race') this.togglePause()
+          return
+        }
         if (this.mode === 'race' || this.mode === 'replay') {
           if (action === 'pause') {
             if (s.photo.active) this.exitPhotoMode()
@@ -325,11 +324,12 @@ export class Engine {
     this.applyResolution(this.qualityManager.scale)
     if (prevQuality.textureScale !== this.quality.textureScale) this.textures.setScale(this.quality.textureScale)
     this.audio?.applySettings(settings.audio)
-    this.input.configure({ sensitivity: settings.controls.steeringSensitivity, deadzone: settings.controls.steeringDeadzone, tilt: settings.controls.touchLayout === 'tilt', tiltSensitivity: settings.controls.tiltSensitivity, devices: settings.controls.devices, players: settings.controls.players })
-    if (this.player) {
-      this.player.controller.assists = { abs: settings.controls.abs, tcs: settings.controls.tractionControl, esc: settings.controls.stabilityControl, autoTransmission: settings.controls.transmission === 'auto' }
-      this.player.controller.fuelEnabled = settings.gameplay.fuelConsumption && this.config?.mode === 'endurance'
-      this.player.controller.damageEnabled = settings.gameplay.damage !== 'off'
+    this.input.configure({ sensitivity: settings.controls.steeringSensitivity, deadzone: settings.controls.steeringDeadzone, tilt: settings.controls.touchLayout === 'tilt', tiltSensitivity: settings.controls.tiltSensitivity, devices: settings.controls.devices, players: settings.controls.players, pedals: settings.controls.pedals })
+    for (const player of [this.player, this.player2]) {
+      if (!player) continue
+      player.controller.assists = { abs: settings.controls.abs, tcs: settings.controls.tractionControl, esc: settings.controls.stabilityControl, autoTransmission: settings.controls.transmission === 'auto' }
+      player.controller.fuelEnabled = settings.gameplay.fuelConsumption && this.config?.mode === 'endurance'
+      player.controller.damageEnabled = settings.gameplay.damage !== 'off'
     }
     saveManager.update((p) => {
       p.settings = settings
@@ -379,6 +379,7 @@ export class Engine {
   async startRace(config: RaceConfig): Promise<void> {
     if (this.mode === 'loading') return
     this.mode = 'loading'
+    this.input.setEnabled(true)
     navigate('loading')
     gameStore.set({ loading: { progress: 0.02, label: 'Preparing session' }, raceConfig: config, results: null, rewards: null, paused: false, messages: [], hudVisible: true, replay: { active: false, playing: false, time: 0, duration: 0, speed: 1 }, photo: { active: false, lastCapture: null } })
     this.paused = false
@@ -387,12 +388,22 @@ export class Engine {
     this.split = config.players === 2 ? (config.splitLayout ?? 'stack') : 'none'
     gameStore.set({ split: this.split })
     await this.unloadSession()
+    this.mode = 'loading'
     await new Promise((r) => setTimeout(r, 30))
     try {
+      if (!this.physics) {
+        gameStore.set({ loading: { progress: 0.08, label: 'Starting physics' } })
+        const { PhysicsWorld } = await import('../physics/PhysicsWorld')
+        this.physics = await PhysicsWorld.create()
+        this.colliderDebug = new ColliderDebug(this.physics, this.scene)
+        this.physics.onContact((e) => this.onContact(e.meta1, e.meta2, e.collider1, e.collider2, e.maxForce))
+      }
       const def = getTrackDefinition(config.trackId)
       gameStore.set({ loading: { progress: 0.15, label: `Building ${def.name}` } })
       await new Promise((r) => setTimeout(r, 16))
-      this.track = await buildTrack(def, this.physics, this.textures, this.quality)
+      this.track = await buildTrack(def, this.physics, this.textures, this.quality, (fraction) => {
+        gameStore.set({ loading: { progress: 0.15 + fraction * 0.35, label: `Loading ${def.name} · ${Math.round(fraction * 100)}%` } })
+      })
       this.scene.add(this.track.root)
       this.cameraRig.tracksideCameras = this.track.tracksideCameras
       gameStore.set({ loading: { progress: 0.55, label: 'Computing racing line' } })
@@ -484,13 +495,17 @@ export class Engine {
     const carId2 = humans === 2 ? (config.carId2 ?? config.carId) : null
     if (carId2) ensureCarState(carId2)
     const spec2 = carId2 ? getVehicleSpec(carId2) : null
-    const aiCount = clamp(config.aiCount, 0, Math.min(13, GAME_MODES[config.mode].aiMax) - (humans - 1))
+    let aiCount = clamp(config.aiCount, 0, Math.min(13, GAME_MODES[config.mode].aiMax) - (humans - 1))
+    if (this.series && this.seriesDrivers.length === 0) this.seriesDrivers = generateField(aiCount, config.aiMix, config.seed)
+    this.aiProfiles = this.series
+      ? this.seriesDrivers.filter((driver) => !this.series!.eliminated.includes(driver.name)).slice(0, aiCount)
+      : generateField(aiCount, config.aiMix, config.seed)
+    aiCount = this.aiProfiles.length
     const total = aiCount + humans
     const playerSlot = config.playerGridSlot ?? (config.mode === 'timetrial' || config.mode === 'freeroam' || config.mode === 'drift' ? 0 : Math.min(total - 1, Math.max(0, Math.round(total * 0.6))))
     const assists = { abs: this.settings.controls.abs, tcs: this.settings.controls.tractionControl, esc: this.settings.controls.stabilityControl, autoTransmission: this.settings.controls.transmission === 'auto' }
     const fuelEnabled = this.settings.gameplay.fuelConsumption && config.mode === 'endurance'
     const damageEnabled = this.settings.gameplay.damage !== 'off'
-    this.aiProfiles = generateField(aiCount, config.aiMix, config.seed)
     const usedCars = new Set<string>()
     if (spec2) usedCars.add(spec2.id)
     // Player 2 lines up right behind (or, from the back row, ahead of) player 1.
@@ -635,7 +650,9 @@ export class Engine {
       this.race!.abort()
     }
     this.paused = false
+    this.input.setEnabled(true)
     await this.unloadSession()
+    this.endSeries()
     this.split = 'none'
     gameStore.set({ split: 'none' })
     this.applySplitQuality()
@@ -670,6 +687,7 @@ export class Engine {
     if (this.track) {
       this.scene.remove(this.track.root)
       this.track.dispose()
+      if (this.track.def.model) modelLibrary.release(this.track.def.model.file)
       this.track = null
     }
     for (const l of this.lightPool) l.visible = false
@@ -745,11 +763,12 @@ export class Engine {
     let tracks: string[]
     if (config.eventId && SERIES_TRACKS[config.eventId]) tracks = SERIES_TRACKS[config.eventId]
     else if (kind === 'championship') {
-      const pool = TRACK_CATALOG.filter((t) => unlocked.includes(t.id) && t.id !== config.trackId).map((t) => t.id)
+      const pool = TRACK_CATALOG.filter((t) => t.closed && unlocked.includes(t.id) && t.id !== config.trackId).map((t) => t.id)
       tracks = [config.trackId, ...pool.sort(() => Math.random() - 0.5).slice(0, 3)]
       while (tracks.length < 4) tracks.push(config.trackId)
     } else tracks = [config.trackId, config.trackId, config.trackId]
     this.series = createSeries(kind, tracks)
+    this.seriesDrivers = []
     gameStore.set({ series: { ...this.series } })
     await this.startRace({ ...config, trackId: tracks[0], seriesRound: 1, seriesTotal: tracks.length, heat: kind === 'knockout' ? 1 : undefined })
   }
@@ -764,7 +783,8 @@ export class Engine {
       const alive = results.entries.filter((e) => !s.eliminated.includes(e.name))
       const cut = Math.max(2, Math.ceil(alive.length / 2))
       for (const e of alive) if (e.position > cut) s.eliminated.push(e.name)
-      const playerOut = s.eliminated.includes(results.entries.find((e) => e.isPlayer)?.name ?? '')
+      for (const e of alive) s.points[e.name] = (s.round + 1) * 100 - e.position
+      const playerOut = results.entries.some((e) => e.isPlayer && s.eliminated.includes(e.name))
       if (playerOut) s.finished = true
     }
     s.round++
@@ -788,12 +808,13 @@ export class Engine {
   async continueSeries(): Promise<void> {
     const s = this.series
     if (!s || s.finished || !this.config) return
-    const heatAi = s.kind === 'knockout' ? Math.max(1, this.vehicles.length - 1 - s.eliminated.length) : this.config.aiCount
+    const heatAi = this.seriesDrivers.filter((driver) => !s.eliminated.includes(driver.name)).length
     await this.startRace({ ...this.config, trackId: s.rounds[s.round], seriesRound: s.round + 1, seriesTotal: s.rounds.length, heat: s.kind === 'knockout' ? s.round + 1 : undefined, aiCount: s.kind === 'knockout' ? Math.min(13, heatAi) : this.config.aiCount, seed: this.config.seed + s.round * 17 })
   }
 
   endSeries(): void {
     this.series = null
+    this.seriesDrivers = []
     gameStore.set({ series: null })
   }
 
@@ -908,9 +929,11 @@ export class Engine {
     this.replayTime = 0
     this.replayPlaying = true
     this.replaySpeed = 1
+    this.paused = false
     this.input.setEnabled(false)
     this.cameraRig.setMode('replay')
-    gameStore.set({ replay: { active: true, playing: true, time: 0, duration: this.replay.length, speed: 1 }, hudVisible: false })
+    gameStore.set({ replay: { active: true, playing: true, time: 0, duration: this.replay.length, speed: 1 }, paused: false, hudVisible: false })
+    navigate('race')
   }
 
   stopReplay(): void {
@@ -924,6 +947,7 @@ export class Engine {
       v.visual.root.position.copy(v.controller.position)
       v.visual.root.quaternion.copy(v.controller.quaternion)
     }
+    if (this.race?.phase === 'finished') navigate('results')
   }
 
   setReplayPlaying(playing: boolean): void {
@@ -1035,6 +1059,7 @@ export class Engine {
 
     if (!this.paused) {
       // Player input.
+      player.input.directSteering = !this.autopilot && input.directSteering
       if (race.active && !this.autopilot) {
         player.input.steer = input.steer
         player.input.throttle = input.throttle
@@ -1053,6 +1078,7 @@ export class Engine {
       const p2 = this.player2
       if (p2) {
         const in2 = this.input.getState(1)
+        p2.input.directSteering = in2.directSteering
         if (race.active) {
           p2.input.steer = in2.steer
           p2.input.throttle = in2.throttle
@@ -1566,7 +1592,7 @@ export class Engine {
     this.post.dispose()
     this.audio?.dispose()
     this.textures.dispose()
-    this.physics.dispose()
+    this.physics?.dispose()
     this.renderer.dispose()
     window.removeEventListener('resize', this.onResize)
     Engine._instance = null

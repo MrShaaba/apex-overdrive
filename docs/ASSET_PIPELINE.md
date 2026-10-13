@@ -1,10 +1,8 @@
 # Asset pipeline
 
-Apex Overdrive ships **no binary assets**: cars are lofted procedurally, textures are
-painted on canvases, audio is synthesised. This keeps the game fully self-contained and
-instant to load. The pipeline below is for teams that want to layer real assets on top.
+Apex Overdrive ships compressed licensed `.glb` models with embedded Draco geometry and KTX2 textures, a real HDRI sky, and procedural audio/textures. Raw source downloads stay in gitignored `assets-src/`. Converted models and attribution are committed; **family photos and their generated manifests remain gitignored** in `public/assets/photos/`.
 
-## Procedural generation (default)
+## Procedural generation and fallback
 | Asset | Generator |
 |---|---|
 | Car bodies, rims, wings, lights | `vehicles/CarMeshBuilder.ts` (silhouette lofts + detail meshes, 2 LODs) |
@@ -83,7 +81,7 @@ Integration points:
   and positions are Draco-quantised at 20 bits (14 bits is a 13 cm grid over a 2 km circuit:
   a bumpy road and mismatched stacked surfaces). Circuit models have seams, drain strips and
   missing slivers in their road surface, so `TrackBuilder` builds an invisible safety net
-  3 cm under the asphalt as the physics sees it (rays per spline sample, columns off the
+  5 mm above the asphalt as the physics sees it (rays per spline sample, columns off the
   asphalt capped at their own surface) — a wheel over a gap drops centimetres, not to the
   apron; a terrain sheet laid over the road inside its own half-width (Suzuka's first
   corner has grass 5–20 cm above the asphalt) is treated as asphalt by the net, while a

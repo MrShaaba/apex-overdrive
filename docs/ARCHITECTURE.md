@@ -12,7 +12,7 @@ the HUD) and a typed **EventBus** (both directions, discrete events).
         useGameStore(selector)          Engine.get().method()
 ┌───────────────┴──────────────────────────────▼──────────────────────┐
 │                          Engine (orchestrator)                       │
-│  Input ─▶ AI drivers ─▶ Vehicle controllers ─▶ Rapier world (60 Hz) │
+│  Input ─▶ AI drivers ─▶ Vehicle controllers ─▶ Rapier world (120 Hz) │
 │      ▼                                                    ▼          │
 │  RaceManager (checkpoints, laps, positions, elimination, pits)       │
 │      ▼                                                    ▼          │
@@ -31,7 +31,7 @@ the HUD) and a typed **EventBus** (both directions, discrete events).
 1. `QualityManager.update` — smoothed frame time drives dynamic resolution.
 2. `InputManager.update` — keyboard/gamepad/touch/tilt → normalised `InputState`.
 3. AI — each `AIDriver.update` produces a `VehicleInput` from the racing line + traffic.
-4. `PhysicsWorld.update(dt, preStep)` — fixed 1/60 s steps with an accumulator (max 4
+4. `PhysicsWorld.update(dt, preStep)` — fixed 1/120 s steps with an accumulator (max 8
    catch-up steps). Before each step every `VehicleController.step` applies suspension,
    tyre, drive and aero forces. Contact-force events are drained after each step.
 5. `RaceManager.update` — progress along the spline, checkpoint validation, lap timing,

@@ -1,20 +1,23 @@
 {
   "name": "apex-overdrive",
   "private": true,
-  "version": "1.0.0",
-  "description": "Apex Overdrive — a browser-native premium 3D racing game built with Three.js, Rapier and React.",
+  "version": "2.0.0",
+  "description": "Apex Overdrive \u2014 a browser-native premium 3D racing game built with Three.js, Rapier and React.",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "build:analyze": "tsc -b && vite build --mode analyze",
     "typecheck": "tsc -b --pretty",
     "lint": "eslint .",
-    "test": "node tests/collider-audit.mjs && node tests/wheel-calibration.mjs && node tests/split-screen.mjs && node tests/billboards.mjs",
-    "preview": "vite preview --host",
+    "test": "node tests/run.mjs",
+    "preview": "vite preview --host 127.0.0.1",
     "assets:manifest": "node tools/asset-pipeline/build-manifest.mjs",
     "assets:photos": "node tools/asset-pipeline/prepare-photos.mjs assets-src/photos/fam-jam",
-    "assets:validate": "node tools/asset-pipeline/validate.mjs"
+    "assets:validate": "node tools/asset-pipeline/validate.mjs",
+    "check": "npm run typecheck && npm run lint && npm run build && npm test && npm run test:production",
+    "start": "vite preview --host 127.0.0.1 --port 4173 --strictPort --open",
+    "test:production": "node tests/production.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
@@ -39,5 +42,8 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
     "vite": "^7.0.4"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

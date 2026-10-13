@@ -94,8 +94,8 @@ export class RaceManager {
       carId,
       isPlayer,
       lap: this.closed ? -1 : 0,
-      nextCheckpoint: 0,
-      checkpointsHit: new Array(this.track.checkpoints.length).fill(false),
+      nextCheckpoint: this.closed ? 0 : 1,
+      checkpointsHit: this.track.checkpoints.map((_, index) => !this.closed && index === 0),
       progress: 0,
       totalProgress: 0,
       position: this.racers.size + 1,
@@ -188,7 +188,7 @@ export class RaceManager {
       }
 
       // Checkpoint crossing: detect when progress passes the next checkpoint distance.
-      if (this.phase !== 'freeroam') {
+      if (this.phase === 'racing') {
         let delta = r.progress - prevProgress
         if (this.closed) {
           if (delta < -this.length / 2) delta += this.length
@@ -200,7 +200,7 @@ export class RaceManager {
             const cp = cps[i]
             let d = cp.distance - prevProgress
             if (this.closed) d = ((d % this.length) + this.length) % this.length
-            if (d >= 0 && d <= delta) this.onCheckpoint(r, i, Math.abs(p.lateral) <= cp.halfWidth)
+            if (d > 0 && d <= delta) this.onCheckpoint(r, i, Math.abs(p.lateral) <= cp.halfWidth)
           }
         }
       }
@@ -262,8 +262,12 @@ export class RaceManager {
   }
 
   private onCheckpoint(r: RacerState, index: number, onTrack: boolean): void {
+    if (!onTrack) return
     const cps = this.track.checkpoints
     if (index === 0) {
+      // An open course starts at the grid and finishes at its final checkpoint.
+      // Crossing its start marker must never award a lap or restart its clock.
+      if (!this.closed) return
       // Start / finish line. Lap counts only if every required checkpoint was hit.
       const allRequired = cps.every((cp, i) => i === 0 || !cp.required || r.checkpointsHit[i])
       if (r.lap < 0) {
@@ -277,7 +281,7 @@ export class RaceManager {
         r.nextCheckpoint = 1
         return
       }
-      if (allRequired || !this.closed) {
+      if (allRequired) {
         const lapTime = this.raceTime - r.currentLapStart
         r.lapTimes.push(lapTime)
         const best = lapTime < r.bestLap
@@ -298,7 +302,6 @@ export class RaceManager {
       r.nextCheckpoint = 1
       return
     }
-    if (!onTrack) return
     r.checkpointsHit[index] = true
     r.nextCheckpoint = index + 1
     if (r.isPlayer) bus.emit('race:checkpoint', { vehicleId: r.vehicleId, index })
@@ -312,7 +315,7 @@ export class RaceManager {
       r.sectorIndex++
     }
     // Point-to-point finish at the last checkpoint.
-    if (!this.closed && index === cps.length - 1) {
+    if (!this.closed && index === cps.length - 1 && cps.every((cp, i) => !cp.required || r.checkpointsHit[i])) {
       const lapTime = this.raceTime - r.currentLapStart
       r.lapTimes.push(lapTime)
       r.bestLap = Math.min(r.bestLap, lapTime)

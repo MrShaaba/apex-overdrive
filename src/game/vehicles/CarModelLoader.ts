@@ -52,7 +52,7 @@ class ModelLibrary {
   }
 
   /** Resolves true when the model is ready, false if it is missing or broken (logged once). */
-  preload(file: string): Promise<boolean> {
+  preload(file: string, onProgress?: (fraction: number) => void): Promise<boolean> {
     if (this.cache.has(file)) return Promise.resolve(true)
     if (this.failed.has(file)) return Promise.resolve(false)
     const inflight = this.pending.get(file)
@@ -62,7 +62,9 @@ class ModelLibrary {
       return Promise.resolve(false)
     }
     const p = this.loader
-      .loadAsync(`${BASE}${file}`)
+      .loadAsync(`${BASE}${file}`, (event) => {
+        if (event.total > 0) onProgress?.(Math.min(1, event.loaded / event.total))
+      })
       .then((gltf) => {
         const scene = gltf.scene
         scene.traverse((o) => {
@@ -85,6 +87,22 @@ class ModelLibrary {
       .finally(() => this.pending.delete(file))
     this.pending.set(file, p)
     return p
+  }
+
+  /** Release a circuit once all its instances have been disposed. Car templates stay cached. */
+  release(file: string): void {
+    const scene = this.cache.get(file)
+    if (!scene) return
+    const geometries = new Set<THREE.BufferGeometry>()
+    const materials = new Set<THREE.Material>()
+    scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return
+      geometries.add(object.geometry)
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material)
+    })
+    for (const geometry of geometries) geometry.dispose()
+    for (const material of materials) disposeMaterial(material)
+    this.cache.delete(file)
   }
 
   dispose(): void {

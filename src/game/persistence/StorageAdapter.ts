@@ -38,7 +38,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async read<T>(key: string): Promise<T | null> {
-    const raw = this.available ? localStorage.getItem(PREFIX + key) : (this.memoryFallback.get(key) ?? null)
+    const raw = this.memoryFallback.get(key) ?? (this.available ? localStorage.getItem(PREFIX + key) : null)
     if (raw == null) return null
     try {
       return JSON.parse(raw) as T
@@ -55,6 +55,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
     try {
       localStorage.setItem(PREFIX + key, raw)
+      this.memoryFallback.delete(key)
     } catch (err) {
       // Quota exceeded: fall back to memory so the session keeps working.
       console.warn('[Storage] write failed, using in-memory fallback', err)
@@ -82,7 +83,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   async usage(): Promise<number> {
     let bytes = 0
     for (const k of await this.keys()) {
-      const raw = this.available ? localStorage.getItem(PREFIX + k) : this.memoryFallback.get(k)
+      const raw = this.memoryFallback.get(k) ?? (this.available ? localStorage.getItem(PREFIX + k) : null)
       bytes += (raw?.length ?? 0) * 2
     }
     return bytes

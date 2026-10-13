@@ -33,8 +33,10 @@ export interface ContactEvent {
   maxForce: number
 }
 
-export const PHYSICS_STEP = 1 / 60
-const MAX_CATCHUP_STEPS = 4
+// Formula-car springs and high downforce need a smaller integration interval than
+// road cars. Keep this independent of rendering (including 30 Hz split screen).
+export const PHYSICS_STEP = 1 / 120
+const MAX_CATCHUP_STEPS = 8
 
 export class PhysicsWorld {
   readonly world: RAPIER.World
@@ -155,7 +157,8 @@ export class PhysicsWorld {
   /** Convenience: create a static trimesh collider with surface metadata. */
   addStaticTrimesh(vertices: Float32Array, indices: Uint32Array, meta: ColliderMeta, friction = 0.9): RAPIER.Collider {
     const body = this.createBody(RAPIER.RigidBodyDesc.fixed())
-    const desc = RAPIER.ColliderDesc.trimesh(vertices, indices).setFriction(friction).setRestitution(0.05)
+    const desc = RAPIER.ColliderDesc.trimesh(vertices, indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
+      .setFriction(friction).setRestitution(0)
     const collider = this.world.createCollider(desc, body)
     this.registerCollider(collider, meta)
     return collider
