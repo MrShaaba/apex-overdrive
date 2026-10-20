@@ -31,3 +31,14 @@ tests/shots/
 
 # Family photos for the Fam Jam billboards (built by tools/asset-pipeline/prepare-photos.mjs) — never committed
 public/assets/photos/
+
+# Build output
+build/
+
+# Environment files and keys — never committed
+.env
+.env*
+!.env.example
+
+# Raw family photo sources (also covered by assets-src/ above; listed explicitly so the rule survives edits)
+assets-src/photos/
