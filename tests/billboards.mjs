@@ -16,6 +16,9 @@ const PHOTOS = path.resolve('public/assets/photos/fam-jam')
 const width = 1280, height = 720
 let failures = 0
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${label}`); if (!ok) failures++ }
+// Photos are personal and gitignored. On a fresh clone the boards are blank, so checks that need photos are skipped.
+const HAS_PHOTOS = fs.existsSync(PHOTOS) && fs.readdirSync(PHOTOS).some((f) => /manifest/i.test(f))
+const photoCheck = (ok, label) => HAS_PHOTOS ? check(ok, label) : console.log(`SKIP ${label} (no photos in public/assets/photos/fam-jam)`)
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const launch = async (extraArgs = []) => {
@@ -70,7 +73,7 @@ const waitRacing = (page) => page.waitForFunction(() => window.__apex.race && wi
     const gaps = info.placed.slice(1).map((p, i) => p.dist - info.placed[i].dist)
     check(gaps.every((g) => g >= 90), `boards at least 90 m apart (min ${Math.min(...gaps)} m)`)
     const photos = info.placed.map((p) => p.photo)
-    check(new Set(photos).size === Math.min(info.count, info.setSize), `no photo on two boards at once (${new Set(photos).size} distinct on ${info.count} boards, set of ${info.setSize})`)
+    photoCheck(new Set(photos).size === Math.min(info.count, info.setSize), `no photo on two boards at once (${new Set(photos).size} distinct on ${info.count} boards, set of ${info.setSize})`)
     check(info.names['billboard-frame'] > 0 && info.names['billboard-panel'] > 0, 'frame and panel instanced meshes present')
     check((info.names['billboard-caption'] ?? 0) === (info.captioned ? info.names['billboard-panel'] : 0) || info.captioned, `caption strips only where photos have captions (${info.names['billboard-caption'] ?? 0} strips, ${info.captioned} captioned photos)`)
     // Colliders: a prop collider sits where each board's frame is, and none reaches the road.
@@ -127,7 +130,7 @@ const waitRacing = (page) => page.waitForFunction(() => window.__apex.race && wi
   // track is loaded and are released with it.
   const keys = () => page.evaluate(() => { const c = window.__apex.textures.cache; const ks = [...c.keys()]; return { image: ks.filter((k) => k.startsWith('image:')).length, caption: ks.filter((k) => k.startsWith('caption:')).length, loaded: ks.filter((k) => k.startsWith('image:')).filter((k) => c.get(k).texture.image && c.get(k).texture.image.width > 2).length } })
   const during = await keys()
-  check(during.image >= 1, `photo textures cached while racing (${during.image} images, ${during.caption} captions)`)
+  photoCheck(during.image >= 1, `photo textures cached while racing (${during.image} images, ${during.caption} captions)`)
   check(during.loaded === during.image, `every photo texture finished loading (${during.loaded}/${during.image})`)
   // Rotation: drive (teleport) round the lap twice; boards left well behind take the next
   // photo, no photo is ever on two boards at once, and the whole set gets shown.
@@ -148,10 +151,10 @@ const waitRacing = (page) => page.waitForFunction(() => window.__apex.race && wi
     return { n, boards: bb.placed.length, shown: bb.shown.size, dupes, swaps, cursor: bb.cursor, stored: localStorage.getItem('apex.photos.cursor:' + bb.set.folder) }
   })
   console.log(`rotation: ${rot.n} photos on ${rot.boards} boards, ${rot.swaps} swaps over 2.2 laps, ${rot.shown} distinct photos shown, cursor ${rot.cursor} (stored ${rot.stored})`)
-  check(rot.swaps >= rot.boards, 'boards take new photos as the player laps')
-  check(rot.dupes === 0, 'no photo on two boards at once at any point')
-  check(rot.shown === rot.n, `every photo in the set was shown (${rot.shown}/${rot.n})`)
-  check(String(rot.cursor) === rot.stored, 'photo cursor persisted for the next session')
+  photoCheck(rot.swaps >= rot.boards, 'boards take new photos as the player laps')
+  photoCheck(rot.dupes === 0, 'no photo on two boards at once at any point')
+  photoCheck(rot.shown === rot.n, `every photo in the set was shown (${rot.shown}/${rot.n})`)
+  photoCheck(String(rot.cursor) === rot.stored, 'photo cursor persisted for the next session')
   await page.evaluate(() => window.__apex.quitToMenu())
   await page.waitForFunction(() => window.__apex.mode === 'showcase', { timeout: 60000 })
   const after = await keys()
