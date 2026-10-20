@@ -1,8 +1,18 @@
 # Apex Overdrive
 
-A browser-native 3D racing game with licensed cars and circuits, a career, AI racing, local two-player split screen, calibrated racing-wheel input, replays and family-photo billboards. React owns the menus and HUD; Three.js and Rapier own the driving experience. No account or backend is required.
+A browser-native 3D racing game with real-circuit models, a career, AI rivals, local two-player split screen, calibrated racing-wheel input, replays and your own photos on trackside billboards. React owns the menus and HUD; Three.js and Rapier own the driving experience. No account, install or backend is required.
 
-This product copy is based on the original local repository at `Dev/apex`. Family photos and raw downloads are present locally and remain gitignored. The menu derives its car/layout counts from the catalogs.
+It's for families and home sim-racers who want a proper racing game that runs in a browser tab: plug in a wheel or a controller, or use the keyboard or touch, and race. I started it in August 2026 with my son as the design lead and chief tester. "Feels like a real game" is the bar, and two players on two wheels is the reason it exists.
+
+It ships 17 CC-BY licensed cars (F1, GT, DTM and road cars) and 8 real-circuit models (Spa, Suzuka, Hungaroring, Sepang, Shanghai, Marina Bay, Indianapolis, Bugatti), alongside procedurally built circuits. See [ROADMAP.md](docs/ROADMAP.md) and the open issues for what's next.
+
+![Lights out at Spa-Francorchamps: the pack heads for Eau Rouge](docs/screenshots/spa-grid.jpg)
+
+| Flat out at 216 km/h | Suzuka in a McLaren F1 GTR |
+| --- | --- |
+| ![Chasing the pack at Spa](docs/screenshots/spa-kemmel.jpg) | ![GT racing at Suzuka](docs/screenshots/suzuka-gt.jpg) |
+
+![Main menu: story, race modes, workshop, local two-player racing](docs/screenshots/menu.jpg)
 
 
 | | |
@@ -116,4 +126,8 @@ public/assets/  compressed licensed models, HDRI and local family photos
 
 ## License
 
-Source code © 2026 Apex Overdrive contributors. Licensed vehicle and circuit model credits are in `public/assets/models/ATTRIBUTION.md`; preserve those notices. Fictional AI driver/team names are separate from licensed real-world car and circuit names.
+The source code is [MIT](LICENSE) © 2026 Bello Mohammed.
+
+The 3D car, circuit and steering-wheel models are not covered by the MIT license. Each is CC-BY 4.0 from its author on Sketchfab, and the sky HDRI is CC0 from Poly Haven. Full credits are in [`public/assets/models/ATTRIBUTION.md`](public/assets/models/ATTRIBUTION.md); keep those notices if you share the project. Audio, liveries, crowds, signage and most textures are generated in code.
+
+Car, team and circuit names are trademarks of their respective owners. This is an independent fan project, not affiliated with or endorsed by any of them. AI driver names are fictional.
