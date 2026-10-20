@@ -5,7 +5,7 @@
 was left unchanged. No remote, push, or deployment was created.
 
 Environment: macOS 27.0, Node 22.23.2, Chrome 155.0.8059.40. The installed catalog
-contains 23 cars and 19 selectable layouts, including the Sepang Fam Jam variant.
+contains 17 cars and 18 selectable layouts (2.1 removed six cars and the drift circuit whose model licenses did not allow redistribution), including the Sepang Fam Jam variant.
 
 ## Run it
 

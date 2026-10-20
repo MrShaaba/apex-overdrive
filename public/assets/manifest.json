@@ -15,28 +15,10 @@
       "bytes": 8891968
     },
     {
-      "id": "model.cars.challenger",
-      "type": "model",
-      "file": "models/cars/challenger.glb",
-      "bytes": 1697116
-    },
-    {
-      "id": "model.cars.charger",
-      "type": "model",
-      "file": "models/cars/charger.glb",
-      "bytes": 17602832
-    },
-    {
       "id": "model.cars.clkdtm",
       "type": "model",
       "file": "models/cars/clkdtm.glb",
       "bytes": 6287140
-    },
-    {
-      "id": "model.cars.countach",
-      "type": "model",
-      "file": "models/cars/countach.glb",
-      "bytes": 4373056
     },
     {
       "id": "model.cars.enforcer",
@@ -55,12 +37,6 @@
       "type": "model",
       "file": "models/cars/gtrgulf.glb",
       "bytes": 5144688
-    },
-    {
-      "id": "model.cars.huracan",
-      "type": "model",
-      "file": "models/cars/huracan.glb",
-      "bytes": 1804100
     },
     {
       "id": "model.cars.jaguar",
@@ -93,12 +69,6 @@
       "bytes": 18821544
     },
     {
-      "id": "model.cars.revuelto",
-      "type": "model",
-      "file": "models/cars/revuelto.glb",
-      "bytes": 8775092
-    },
-    {
       "id": "model.cars.sf23",
       "type": "model",
       "file": "models/cars/sf23.glb",
@@ -123,12 +93,6 @@
       "bytes": 9352788
     },
     {
-      "id": "model.cars.w14",
-      "type": "model",
-      "file": "models/cars/w14.glb",
-      "bytes": 7745464
-    },
-    {
       "id": "model.cars.w14free",
       "type": "model",
       "file": "models/cars/w14free.glb",
@@ -147,22 +111,10 @@
       "bytes": 700980
     },
     {
-      "id": "model.props.city",
-      "type": "model",
-      "file": "models/props/city.glb",
-      "bytes": 7651184
-    },
-    {
       "id": "model.tracks.bugatti",
       "type": "model",
       "file": "models/tracks/bugatti.glb",
       "bytes": 20207608
-    },
-    {
-      "id": "model.tracks.drift",
-      "type": "model",
-      "file": "models/tracks/drift.glb",
-      "bytes": 15720164
     },
     {
       "id": "model.tracks.hungaroring",

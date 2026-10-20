@@ -55,7 +55,7 @@ export const CAREER: CareerChapter[] = [
     starsToUnlock: 6,
     events: [
       { id: 'c2-e1', title: 'Metro Rush Hour', intro: 'Harbor City at dusk. Ninety-degree corners, level crossing, thirteen cars.', mode: 'quick', trackId: 'metro-loop', laps: 3, aiCount: 11, aiMix: 'amateur', weather: 'clear', hour: 18, rewardCredits: 12000, rivalId: 'rafael-costa' },
-      { id: 'c2-e2', title: 'Slide Night', intro: 'The drift crew wants 25,000 points before they take you seriously. Any car, any angle.', mode: 'drift', trackId: 'lakeside-circuit', laps: 2, aiCount: 0, aiMix: 'amateur', weather: 'clear', hour: 20, rewardCredits: 10000, rewardCar: 'dodge-charger' },
+      { id: 'c2-e2', title: 'Slide Night', intro: 'The drift crew wants 25,000 points before they take you seriously. Any car, any angle.', mode: 'drift', trackId: 'lakeside-circuit', laps: 2, aiCount: 0, aiMix: 'amateur', weather: 'clear', hour: 20, rewardCredits: 10000, rewardCar: 'mercedes-sls' },
       { id: 'c2-e3', title: 'Wet Docks', intro: 'Rotterdam in the rain. The crane swings on a twelve-second cycle; learn it.', mode: 'quick', trackId: 'shipyard-district', laps: 3, aiCount: 9, aiMix: 'amateur', weather: 'rain', hour: 19, rewardCredits: 14000 },
       { id: 'c2-e4', title: 'Costa Cup', intro: 'A four-round season cup. Costa is quick everywhere. Beat him on points.', mode: 'championship', trackId: 'metro-loop', laps: 3, aiCount: 11, aiMix: 'amateur', weather: 'random', hour: 'default', rewardCredits: 25000, rivalId: 'rafael-costa', rewardCar: 'mercedes-clk-dtm' },
     ],
@@ -69,7 +69,7 @@ export const CAREER: CareerChapter[] = [
       { id: 'c3-e1', title: 'Badlands Dash', intro: 'Point-to-point through the canyon. Mine carts, rockfall, gravel. One shot.', mode: 'sprint', trackId: 'badlands-run', laps: 1, aiCount: 9, aiMix: 'pro', weather: 'clear', hour: 18, rewardCredits: 18000 },
       { id: 'c3-e2', title: 'Rally Roots', intro: 'Gravel shortcuts only pay off in the right car. Take the Torrent through Ardenne.', mode: 'quick', trackId: 'woodland-raceway', laps: 3, aiCount: 9, aiMix: 'pro', weather: 'overcast', hour: 9, rewardCredits: 16000, requiredClass: ['rally'] },
       { id: 'c3-e3', title: 'Stelvio Knockout', intro: 'Three heats up the mountain. Top half advances. The final is two laps of hairpins.', mode: 'knockout', trackId: 'alpine-ridge', laps: 2, aiCount: 11, aiMix: 'pro', weather: 'cloudy', hour: 9, rewardCredits: 22000 },
-      { id: 'c3-e4', title: 'Alpine Endurance', intro: 'Eight laps. Fuel and damage matter; the pit lane is on the right after the viaduct.', mode: 'endurance', trackId: 'alpine-ridge', laps: 8, aiCount: 11, aiMix: 'pro', weather: 'random', hour: 15, rewardCredits: 30000, rewardCar: 'lamborghini-huracan-gt3' },
+      { id: 'c3-e4', title: 'Alpine Endurance', intro: 'Eight laps. Fuel and damage matter; the pit lane is on the right after the viaduct.', mode: 'endurance', trackId: 'alpine-ridge', laps: 8, aiCount: 11, aiMix: 'pro', weather: 'random', hour: 15, rewardCredits: 30000, rewardCar: 'mclaren-f1-gtr-gulf' },
     ],
   },
   {
@@ -93,7 +93,7 @@ export const CAREER: CareerChapter[] = [
       { id: 'c5-e1', title: 'Boulevard Debut', intro: 'Thirteen cars under the signs. The fountain floods the chicane every ten seconds.', mode: 'quick', trackId: 'neon-boulevard', laps: 3, aiCount: 13, aiMix: 'elite', weather: 'rain', hour: 22, rewardCredits: 28000 },
       { id: 'c5-e2', title: 'Tanaka Tandem', intro: 'Drift the boulevard. 60,000 points earns her respect.', mode: 'drift', trackId: 'neon-boulevard', laps: 3, aiCount: 2, aiMix: 'elite', weather: 'cloudy', hour: 23, rewardCredits: 25000, rivalId: 'aiko-tanaka' },
       { id: 'c5-e3', title: 'Midnight Knockout', intro: 'Knockout heats on the Metro Loop after dark.', mode: 'knockout', trackId: 'metro-loop', laps: 2, aiCount: 13, aiMix: 'elite', weather: 'clear', hour: 0, rewardCredits: 32000 },
-      { id: 'c5-e4', title: 'City Endurance', intro: 'Twelve laps of Shipyard. Manage the crane, the fuel and thirteen elite rivals.', mode: 'endurance', trackId: 'shipyard-district', laps: 12, aiCount: 13, aiMix: 'elite', weather: 'random', hour: 20, rewardCredits: 45000, rewardCar: 'lamborghini-revuelto' },
+      { id: 'c5-e4', title: 'City Endurance', intro: 'Twelve laps of Shipyard. Manage the crane, the fuel and thirteen elite rivals.', mode: 'endurance', trackId: 'shipyard-district', laps: 12, aiCount: 13, aiMix: 'elite', weather: 'random', hour: 20, rewardCredits: 45000, rewardCar: 'mercedes-amg-one' },
     ],
   },
   {

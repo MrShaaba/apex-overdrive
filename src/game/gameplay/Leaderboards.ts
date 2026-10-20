@@ -21,7 +21,7 @@ function syntheticEntries(trackId: string, scope: LeaderboardScope): Leaderboard
   return allDrivers()
     .slice(0, 12)
     .map((d) => {
-      const carPool = ['lamborghini-revuelto', 'mclaren-f1-gtr', 'lamborghini-huracan-gt3', 'dodge-charger', 'jaguar-i-type', 'mclaren-f1-gtr-longtail']
+      const carPool = ['mercedes-amg-one', 'mclaren-f1-gtr', 'mercedes-c63-dtm', 'mercedes-sls', 'jaguar-i-type', 'mclaren-f1-gtr-longtail']
       const val = scope === 'drift' ? Math.round(12000 * d.skill + rng() * 4000) : ref * (1.02 + (1 - d.skill) * 0.32 + rng() * 0.04)
       return { name: d.name, time: val, carId: d.favouriteCar || carPool[Math.floor(rng() * carPool.length)], date: Date.now() - Math.floor(rng() * 30) * 86400000, isPlayer: false }
     })
